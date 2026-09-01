@@ -36,6 +36,9 @@ const el = {
   contextMenu: document.getElementById('context-menu'),
 
   nodeFormPopover: document.getElementById('node-form-popover'),
+  nodeFormHeaderIcon: document.getElementById('node-form-header-icon'),
+  nodeFormHeaderTitle: document.getElementById('node-form-header-title'),
+  nodeFormClose: document.getElementById('node-form-close'),
   nodeForm: document.getElementById('node-form'),
   nodeFormTitle: document.getElementById('node-form-title'),
   nodeFormTitleHint: document.getElementById('node-form-title-hint'),
@@ -43,12 +46,16 @@ const el = {
   nodeFormCancel: document.getElementById('node-form-cancel'),
 
   nodeViewPopover: document.getElementById('node-view-popover'),
+  nodeViewHeaderIcon: document.getElementById('node-view-header-icon'),
   nodeViewTitle: document.getElementById('node-view-title'),
   nodeViewDesc: document.getElementById('node-view-desc'),
   nodeViewEmpty: document.getElementById('node-view-empty'),
   nodeViewEdit: document.getElementById('node-view-edit'),
+  nodeViewClose: document.getElementById('node-view-close'),
 
   ticketFormPopover: document.getElementById('ticket-form-popover'),
+  ticketFormHeaderIcon: document.getElementById('ticket-form-header-icon'),
+  ticketFormClose: document.getElementById('ticket-form-close'),
   ticketForm: document.getElementById('ticket-form'),
   ticketFormTitle: document.getElementById('ticket-form-title'),
   ticketFormDesc: document.getElementById('ticket-form-desc'),
@@ -56,6 +63,8 @@ const el = {
   ticketFormCancel: document.getElementById('ticket-form-cancel'),
 
   folderFormPopover: document.getElementById('folder-form-popover'),
+  folderFormHeaderIcon: document.getElementById('folder-form-header-icon'),
+  folderFormClose: document.getElementById('folder-form-close'),
   folderForm: document.getElementById('folder-form'),
   folderFormName: document.getElementById('folder-form-name'),
   folderFormCancel: document.getElementById('folder-form-cancel'),
@@ -78,6 +87,13 @@ const el = {
   exportTicketBtn: document.getElementById('export-ticket-btn'),
 
   toast: document.getElementById('toast'),
+
+  confirmOverlay: document.getElementById('confirm-overlay'),
+  confirmIcon: document.getElementById('confirm-icon'),
+  confirmTitle: document.getElementById('confirm-title'),
+  confirmMessage: document.getElementById('confirm-message'),
+  confirmCancel: document.getElementById('confirm-cancel'),
+  confirmOk: document.getElementById('confirm-ok'),
 };
 
 let toastTimer = null;
@@ -90,6 +106,38 @@ function showToast(message, kind) {
     el.toast.hidden = true;
   }, 3200);
 }
+
+// --- Custom confirm dialog (replaces window.confirm) ---
+
+el.confirmIcon.innerHTML = svgIcon('alertTriangle', 22);
+
+let confirmResolver = null;
+
+function askConfirm({ title, message, confirmLabel = 'Elimina' }) {
+  el.confirmTitle.textContent = title;
+  el.confirmMessage.textContent = message;
+  el.confirmOk.textContent = confirmLabel;
+  el.confirmOverlay.hidden = false;
+  requestAnimationFrame(() => el.confirmCancel.focus());
+  return new Promise((resolve) => {
+    confirmResolver = resolve;
+  });
+}
+
+function closeConfirm(result) {
+  el.confirmOverlay.hidden = true;
+  if (confirmResolver) {
+    const resolve = confirmResolver;
+    confirmResolver = null;
+    resolve(result);
+  }
+}
+
+el.confirmCancel.addEventListener('click', () => closeConfirm(false));
+el.confirmOk.addEventListener('click', () => closeConfirm(true));
+el.confirmOverlay.addEventListener('click', (e) => {
+  if (e.target === el.confirmOverlay) closeConfirm(false);
+});
 
 const NODE_HEIGHT = 48;
 const NODE_WIDTH = 170;
@@ -150,6 +198,14 @@ el.searchBtn.innerHTML = svgIcon('search', 16);
 el.newFolderBtn.innerHTML = svgIcon('folderPlus', 16);
 el.importBtn.innerHTML = svgIcon('upload', 16);
 el.nodeViewEdit.innerHTML = svgIcon('pencil', 13);
+el.nodeViewClose.innerHTML = svgIcon('x', 13);
+el.nodeViewHeaderIcon.innerHTML = svgIcon('info', 14);
+el.nodeFormHeaderIcon.innerHTML = svgIcon('pencil', 14);
+el.nodeFormClose.innerHTML = svgIcon('x', 13);
+el.ticketFormHeaderIcon.innerHTML = svgIcon('ticket', 14);
+el.ticketFormClose.innerHTML = svgIcon('x', 13);
+el.folderFormHeaderIcon.innerHTML = svgIcon('folder', 14);
+el.folderFormClose.innerHTML = svgIcon('x', 13);
 el.loginBrandIcon.innerHTML = svgIcon('ticket', 26);
 el.githubLoginIcon.innerHTML = svgIconSolid('github', 18);
 el.logoutBtn.innerHTML = svgIcon('x', 13);
@@ -394,7 +450,12 @@ function renderFolderGroup(folder, tickets) {
   if (folder) {
     header.querySelector('.folder-delete').addEventListener('click', async (e) => {
       e.stopPropagation();
-      if (!confirm(`Eliminare la cartella "${folder.name}"? I ticket al suo interno non verranno eliminati.`)) return;
+      const ok = await askConfirm({
+        title: 'Eliminare la cartella?',
+        message: `"${folder.name}" verrà eliminata. I ticket al suo interno non verranno eliminati, solo spostati fuori dalla cartella.`,
+        confirmLabel: 'Elimina cartella',
+      });
+      if (!ok) return;
       await api(`/api/folders/${folder.id}`, { method: 'DELETE' });
       await loadAll();
       showToast(`Cartella "${folder.name}" eliminata.`, 'success');
@@ -441,7 +502,12 @@ function renderTicketItem(t) {
   });
   item.querySelector('.delete-ticket').addEventListener('click', async (e) => {
     e.stopPropagation();
-    if (!confirm(`Eliminare il ticket "${t.title}"?`)) return;
+    const ok = await askConfirm({
+      title: 'Eliminare il ticket?',
+      message: `"${t.title}" e tutto il suo grafo verranno eliminati. L'operazione non è reversibile.`,
+      confirmLabel: 'Elimina ticket',
+    });
+    if (!ok) return;
     await api(`/api/tickets/${t.id}`, { method: 'DELETE' });
     if (state.currentTicketId === t.id) {
       state.currentTicketId = null;
@@ -519,6 +585,7 @@ el.newTicketBtn.addEventListener('click', () => {
 });
 
 el.ticketFormCancel.addEventListener('click', () => closeFormPopover(el.ticketFormPopover, el.ticketForm));
+el.ticketFormClose.addEventListener('click', () => closeFormPopover(el.ticketFormPopover, el.ticketForm));
 
 el.ticketForm.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -541,6 +608,7 @@ el.newFolderBtn.addEventListener('click', () => {
 });
 
 el.folderFormCancel.addEventListener('click', () => closeFormPopover(el.folderFormPopover, el.folderForm));
+el.folderFormClose.addEventListener('click', () => closeFormPopover(el.folderFormPopover, el.folderForm));
 
 el.folderForm.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -765,6 +833,7 @@ el.nodeViewEdit.addEventListener('click', () => {
   closeNodeView();
   if (node) editNode(node);
 });
+el.nodeViewClose.addEventListener('click', () => closeNodeView());
 
 // --- Node form popover ---
 
@@ -774,6 +843,7 @@ function openNodeForm({ clientX, clientY, initial, onSubmit, lockTitle }) {
   closeAllPopovers();
   resetMarkdownTabs('node-form');
   nodeFormState = { onSubmit };
+  el.nodeFormHeaderTitle.textContent = initial.label ? 'Modifica nodo' : 'Nuovo nodo';
   el.nodeFormTitle.value = initial.label || '';
   el.nodeFormDesc.value = initial.description || '';
   el.nodeFormTitle.readOnly = !!lockTitle;
@@ -825,6 +895,7 @@ el.nodeForm.addEventListener('submit', (e) => {
 });
 
 el.nodeFormCancel.addEventListener('click', () => closeNodeForm());
+el.nodeFormClose.addEventListener('click', () => closeNodeForm());
 
 function removeNode(nodeId) {
   state.graph.nodes = state.graph.nodes.filter((n) => n.id !== nodeId);
@@ -938,6 +1009,11 @@ function isTypingInField() {
 }
 
 document.addEventListener('keydown', (e) => {
+  if (!el.confirmOverlay.hidden) {
+    if (e.key === 'Escape') closeConfirm(false);
+    else if (e.key === 'Enter') closeConfirm(true);
+    return;
+  }
   if (e.key === 'Escape') {
     state.mode = 'idle';
     state.linkFirst = null;

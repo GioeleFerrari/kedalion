@@ -99,15 +99,22 @@
   <div id="context-menu" class="context-menu" hidden></div>
 
   <div id="node-view-popover" class="popover node-view-popover" hidden>
-    <div class="node-view-header">
+    <div class="popover-header">
+      <span class="popover-header-icon" id="node-view-header-icon"></span>
       <h3 id="node-view-title"></h3>
       <button type="button" id="node-view-edit" class="icon-btn-sm" title="Modifica"></button>
+      <button type="button" id="node-view-close" class="icon-btn-sm" title="Chiudi"></button>
     </div>
     <div id="node-view-desc" class="node-view-desc markdown-body"></div>
     <p id="node-view-empty" class="node-view-empty" hidden>Nessuna descrizione. Clicca la matita per aggiungerne una.</p>
   </div>
 
   <div id="node-form-popover" class="popover" hidden>
+    <div class="popover-header">
+      <span class="popover-header-icon" id="node-form-header-icon"></span>
+      <h3 id="node-form-header-title">Nuovo nodo</h3>
+      <button type="button" id="node-form-close" class="icon-btn-sm" title="Chiudi"></button>
+    </div>
     <form id="node-form">
       <label>
         Titolo
@@ -133,6 +140,11 @@
   </div>
 
   <div id="ticket-form-popover" class="popover" hidden>
+    <div class="popover-header">
+      <span class="popover-header-icon" id="ticket-form-header-icon"></span>
+      <h3>Nuovo ticket</h3>
+      <button type="button" id="ticket-form-close" class="icon-btn-sm" title="Chiudi"></button>
+    </div>
     <form id="ticket-form">
       <label>
         Titolo ticket
@@ -163,6 +175,11 @@
   </div>
 
   <div id="folder-form-popover" class="popover" hidden>
+    <div class="popover-header">
+      <span class="popover-header-icon" id="folder-form-header-icon"></span>
+      <h3>Nuova cartella</h3>
+      <button type="button" id="folder-form-close" class="icon-btn-sm" title="Chiudi"></button>
+    </div>
     <form id="folder-form">
       <label>
         Nome cartella
@@ -176,6 +193,18 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
+
+  <div id="confirm-overlay" class="confirm-overlay" hidden>
+    <div class="confirm-dialog" role="alertdialog" aria-modal="true">
+      <div id="confirm-icon" class="confirm-icon"></div>
+      <h3 id="confirm-title"></h3>
+      <p id="confirm-message"></p>
+      <div class="confirm-actions">
+        <button type="button" id="confirm-cancel" class="btn-secondary">Annulla</button>
+        <button type="button" id="confirm-ok" class="btn-confirm-danger">Elimina</button>
+      </div>
+    </div>
+  </div>
 
   <script src="icons.js"></script>
   <script src="app.js"></script>
