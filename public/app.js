@@ -359,6 +359,7 @@ function renderFolderGroup(folder, tickets) {
       if (!confirm(`Eliminare la cartella "${folder.name}"? I ticket al suo interno non verranno eliminati.`)) return;
       await api(`/api/folders/${folder.id}`, { method: 'DELETE' });
       await loadAll();
+      showToast(`Cartella "${folder.name}" eliminata.`, 'success');
     });
   }
 
@@ -411,6 +412,7 @@ function renderTicketItem(t) {
       showEmptyState();
     }
     await loadAll();
+    showToast(`Ticket "${t.title}" eliminato.`, 'success');
   });
   return item;
 }
@@ -1264,11 +1266,22 @@ function renderGraph() {
 
   let defs = document.createElementNS(SVG_NS, 'defs');
   defs.innerHTML = `
-    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L8,3 z" class="edge-arrow" />
+    <marker id="arrowhead" markerWidth="9" markerHeight="9" refX="7.6" refY="4.5" orient="auto"
+      markerUnits="userSpaceOnUse">
+      <path d="M0,0.6 L9,4.5 L0,8.4 L2.4,4.5 Z" class="edge-arrow" />
     </marker>
   `;
   el.svg.appendChild(defs);
+
+  if (state.graph.nodes.length === 0) {
+    const hint = document.createElementNS(SVG_NS, 'text');
+    hint.setAttribute('x', '50%');
+    hint.setAttribute('y', '50%');
+    hint.setAttribute('class', 'empty-graph-hint');
+    hint.textContent = 'Nessun passaggio ancora — clicca "+ Nodo" o fai doppio click qui per iniziare';
+    hint.style.pointerEvents = 'none';
+    el.svg.appendChild(hint);
+  }
 
   for (const edge of state.graph.edges) {
     const from = state.graph.nodes.find((n) => n.id === edge.from);

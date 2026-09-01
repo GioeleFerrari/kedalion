@@ -1,4 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
   <rect width="24" height="24" rx="6" fill="#7b42bc"/>
-  <path d="M3 9a2 2 0 0 0 2 2v2a2 2 0 0 0-2 2v0a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v0a2 2 0 0 0-2-2v-2a2 2 0 0 0 2-2v0a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v0z" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Anvil: a nod to Cedalion, the smith's helper who guided Orion at Hephaestus's forge. -->
+  <polygon points="3,12 8.5,9.3 8.5,13.3 3,15" fill="#ffffff"/>
+  <rect x="8" y="9" width="12.5" height="4.2" rx="1.1" fill="#ffffff"/>
+  <rect x="12.5" y="13" width="3.5" height="2.6" fill="#ffffff"/>
+  <polygon points="9.5,15.4 18,15.4 20.3,20.3 7.2,20.3" fill="#ffffff"/>
 </svg>
