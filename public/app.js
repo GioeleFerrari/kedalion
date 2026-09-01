@@ -9,6 +9,7 @@ const state = {
   multiSelected: new Set(), // node ids selected via marquee / shift-click, moved together
   searchQuery: '',
   collapsedFolders: new Set(),
+  pan: { x: 0, y: 0 }, // canvas viewport offset, lets a graph wider than the screen be scrolled/panned
 };
 
 const el = {
@@ -29,6 +30,7 @@ const el = {
   startNodeBtn: document.getElementById('start-node-btn'),
   endNodeBtn: document.getElementById('end-node-btn'),
   linkModeBtn: document.getElementById('link-mode-btn'),
+  centerViewBtn: document.getElementById('center-view-btn'),
   deleteSelectionBtn: document.getElementById('delete-selection-btn'),
   linkHint: document.getElementById('link-hint'),
   contextMenu: document.getElementById('context-menu'),
@@ -97,6 +99,42 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function nodeWidth() {
   return NODE_WIDTH;
+}
+
+// Converts a mouse event's viewport coordinates into graph space (i.e. undoes the
+// current pan offset), since the canvas can be scrolled independently of the nodes.
+function clientToGraph(clientX, clientY) {
+  const rect = el.svg.getBoundingClientRect();
+  return { x: clientX - rect.left - state.pan.x, y: clientY - rect.top - state.pan.y };
+}
+
+function viewCenterGraphPoint() {
+  const rect = el.svg.getBoundingClientRect();
+  return clientToGraph(rect.left + rect.width / 2, rect.top + rect.height / 2);
+}
+
+// Pans the view so the whole graph is centered in the visible canvas.
+function centerGraphView() {
+  const rect = el.svg.getBoundingClientRect();
+  const nodes = state.graph.nodes;
+  if (nodes.length === 0) {
+    state.pan = { x: 0, y: 0 };
+    return;
+  }
+  const minX = Math.min(...nodes.map((n) => n.x - nodeWidth() / 2));
+  const maxX = Math.max(...nodes.map((n) => n.x + nodeWidth() / 2));
+  const minY = Math.min(...nodes.map((n) => n.y - NODE_HEIGHT / 2));
+  const maxY = Math.max(...nodes.map((n) => n.y + NODE_HEIGHT / 2));
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  state.pan = { x: rect.width / 2 - centerX, y: rect.height / 2 - centerY };
+}
+
+// Cheap panning update: just move the existing group instead of rebuilding the
+// whole graph (nodes/edges/listeners) on every wheel tick or pan-drag frame.
+function applyPanTransform() {
+  const viewport = el.svg.querySelector('.graph-viewport');
+  if (viewport) viewport.setAttribute('transform', `translate(${state.pan.x}, ${state.pan.y})`);
 }
 
 function truncateLabel(label) {
@@ -378,22 +416,6 @@ function renderFolderGroup(folder, tickets) {
   return wrapper;
 }
 
-function formatRelativeTime(iso) {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const diffMin = Math.round(diffMs / 60000);
-  if (diffMin < 1) return 'adesso';
-  if (diffMin < 60) return `${diffMin} min fa`;
-  const diffH = Math.round(diffMin / 60);
-  if (diffH < 24) return `${diffH} h fa`;
-  const diffD = Math.round(diffH / 24);
-  if (diffD === 1) return 'ieri';
-  if (diffD < 7) return `${diffD} g fa`;
-  if (diffD < 30) return `${Math.round(diffD / 7)} sett fa`;
-  if (diffD < 365) return `${Math.round(diffD / 30)} mesi fa`;
-  const years = Math.round(diffD / 365);
-  return `${years} ${years === 1 ? 'anno' : 'anni'} fa`;
-}
-
 function renderTicketItem(t) {
   const item = document.createElement('div');
   const statusClass = t.status === 'done' ? 'status-done' : 'status-open';
@@ -401,16 +423,11 @@ function renderTicketItem(t) {
   item.innerHTML = `
     <div class="t-info">
       <div class="t-title"></div>
-      <div class="t-meta">
-        <span class="t-badge"></span>
-        <span class="t-time"></span>
-      </div>
     </div>
     <button class="delete-ticket" title="Elimina ticket">${svgIcon('trash', 13)}</button>
   `;
   item.querySelector('.t-title').textContent = t.title;
-  item.querySelector('.t-badge').textContent = t.status === 'done' ? 'Completato' : 'Aperto';
-  item.querySelector('.t-time').textContent = formatRelativeTime(t.updatedAt || t.createdAt);
+  item.title = t.status === 'done' ? 'Completato' : 'Aperto';
   item.setAttribute('draggable', 'true');
   item.addEventListener('dragstart', (e) => {
     e.dataTransfer.setData('text/plain', t.id);
@@ -463,6 +480,7 @@ async function selectTicket(id) {
   el.ticketView.hidden = false;
 
   state.graph = await api(`/api/tickets/${id}/graph`);
+  centerGraphView();
   renderGraph();
 }
 
@@ -836,9 +854,9 @@ async function saveGraph() {
 }
 
 el.addNodeBtn.addEventListener('click', () => {
-  const rect = el.svg.getBoundingClientRect();
-  const x = rect.width / 2 + (Math.random() * 60 - 30);
-  const y = rect.height / 2 + (Math.random() * 60 - 30);
+  const center = viewCenterGraphPoint();
+  const x = center.x + (Math.random() * 60 - 30);
+  const y = center.y + (Math.random() * 60 - 30);
   const btnRect = el.addNodeBtn.getBoundingClientRect();
   addNodeAt(x, y, btnRect.left, btnRect.bottom + 6);
 });
@@ -847,6 +865,11 @@ el.linkModeBtn.addEventListener('click', () => {
   state.mode = state.mode === 'link' ? 'idle' : 'link';
   state.linkFirst = null;
   updateLinkModeUI();
+});
+
+el.centerViewBtn.addEventListener('click', () => {
+  centerGraphView();
+  renderGraph();
 });
 
 function startLinkFrom(node) {
@@ -865,16 +888,16 @@ function addSpecialNode(nodeType) {
     renderGraph();
     return;
   }
-  const rect = el.svg.getBoundingClientRect();
+  const center = viewCenterGraphPoint();
   const otherType = nodeType === 'start' ? 'end' : 'start';
   const other = state.graph.nodes.find((n) => n.nodeType === otherType);
   let x;
   if (other) {
     x = nodeType === 'start' ? Math.max(80, other.x - 260) : other.x + 260;
   } else {
-    x = nodeType === 'start' ? 90 : rect.width - 90;
+    x = nodeType === 'start' ? center.x - 200 : center.x + 200;
   }
-  const y = rect.height / 2;
+  const y = center.y;
   const node = {
     id: genId(),
     label: nodeType === 'start' ? 'Inizio' : 'Fine',
@@ -937,23 +960,36 @@ document.addEventListener('keydown', (e) => {
 
 let marqueeState = null;
 let suppressNextCanvasClick = false;
+let panState = null;
 
 el.svg.addEventListener('mousedown', (e) => {
   // Avoid the native text-selection cursor/highlight that a double-click on the canvas can trigger.
   if (e.detail > 1) e.preventDefault();
 
+  if (e.button === 1) {
+    // Middle-mouse-button drag pans the view, regardless of what's under the cursor.
+    e.preventDefault();
+    panState = { startClientX: e.clientX, startClientY: e.clientY, startPan: { ...state.pan } };
+    return;
+  }
+
   if (e.button !== 0 || state.mode === 'link' || e.target !== el.svg) return;
-  const rect = el.svg.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  const { x, y } = clientToGraph(e.clientX, e.clientY);
   marqueeState = { startX: x, startY: y, curX: x, curY: y, moved: false };
 });
+
+el.svg.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  state.pan.x -= e.deltaX;
+  state.pan.y -= e.deltaY;
+  applyPanTransform();
+}, { passive: false });
 
 el.svg.addEventListener('dblclick', (e) => {
   e.preventDefault();
   if (e.target === el.svg) {
-    const rect = el.svg.getBoundingClientRect();
-    addNodeAt(e.clientX - rect.left, e.clientY - rect.top, e.clientX, e.clientY);
+    const p = clientToGraph(e.clientX, e.clientY);
+    addNodeAt(p.x, p.y, e.clientX, e.clientY);
   }
 });
 
@@ -1065,9 +1101,7 @@ function onEdgeContextMenu(edge, e) {
 el.svg.addEventListener('contextmenu', (e) => {
   if (e.target !== el.svg) return;
   e.preventDefault();
-  const rect = el.svg.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  const { x, y } = clientToGraph(e.clientX, e.clientY);
   const hasStart = state.graph.nodes.some((n) => n.nodeType === 'start');
   const hasEnd = state.graph.nodes.some((n) => n.nodeType === 'end');
   showContextMenu(e.clientX, e.clientY, [
@@ -1114,6 +1148,7 @@ let groupDragState = null;
 let suppressNextClick = false;
 
 function onNodeMouseDown(node, e) {
+  if (e.button !== 0) return; // let a middle-click pass through to the canvas-level pan handler
   if (state.mode === 'link') return;
   if (e.detail > 1) e.preventDefault();
   e.stopPropagation(); // don't let this bubble into the marquee-selection mousedown handler
@@ -1138,11 +1173,11 @@ function onNodeMouseDown(node, e) {
     state.multiSelected.clear();
     renderGraph();
   }
-  const rect = el.svg.getBoundingClientRect();
+  const p = clientToGraph(e.clientX, e.clientY);
   dragState = {
     nodeId: node.id,
-    offsetX: e.clientX - rect.left - node.x,
-    offsetY: e.clientY - rect.top - node.y,
+    offsetX: p.x - node.x,
+    offsetY: p.y - node.y,
     moved: false,
   };
 }
@@ -1161,14 +1196,16 @@ function nodesOverlapRect(node, rx1, ry1, rx2, ry2) {
 
 function updateMarqueeRect() {
   if (!marqueeState) return;
-  let rectEl = el.svg.querySelector('#marquee-rect');
+  const viewport = el.svg.querySelector('.graph-viewport');
+  if (!viewport) return;
+  let rectEl = viewport.querySelector('#marquee-rect');
   if (!rectEl) {
     rectEl = document.createElementNS(SVG_NS, 'rect');
     rectEl.setAttribute('id', 'marquee-rect');
     rectEl.setAttribute('class', 'marquee-rect');
-    el.svg.appendChild(rectEl);
+    viewport.appendChild(rectEl);
   } else {
-    el.svg.appendChild(rectEl); // keep it on top after a renderGraph() rebuild
+    viewport.appendChild(rectEl); // keep it on top after a renderGraph() rebuild
   }
   const x = Math.min(marqueeState.startX, marqueeState.curX);
   const y = Math.min(marqueeState.startY, marqueeState.curY);
@@ -1181,10 +1218,17 @@ function updateMarqueeRect() {
 }
 
 el.svg.addEventListener('mousemove', (e) => {
+  if (panState) {
+    state.pan.x = panState.startPan.x + (e.clientX - panState.startClientX);
+    state.pan.y = panState.startPan.y + (e.clientY - panState.startClientY);
+    applyPanTransform();
+    return;
+  }
+
   if (marqueeState) {
-    const rect = el.svg.getBoundingClientRect();
-    marqueeState.curX = e.clientX - rect.left;
-    marqueeState.curY = e.clientY - rect.top;
+    const p = clientToGraph(e.clientX, e.clientY);
+    marqueeState.curX = p.x;
+    marqueeState.curY = p.y;
     if (
       Math.abs(marqueeState.curX - marqueeState.startX) > 3 ||
       Math.abs(marqueeState.curY - marqueeState.startY) > 3
@@ -1233,11 +1277,11 @@ el.svg.addEventListener('mousemove', (e) => {
   }
 
   if (!dragState) return;
-  const rect = el.svg.getBoundingClientRect();
   const node = state.graph.nodes.find((n) => n.id === dragState.nodeId);
   if (!node) return;
-  let newX = e.clientX - rect.left - dragState.offsetX;
-  let newY = e.clientY - rect.top - dragState.offsetY;
+  const p = clientToGraph(e.clientX, e.clientY);
+  let newX = p.x - dragState.offsetX;
+  let newY = p.y - dragState.offsetY;
   if (e.ctrlKey || e.metaKey) {
     newX = snapToGrid(newX);
     newY = snapToGrid(newY);
@@ -1249,6 +1293,10 @@ el.svg.addEventListener('mousemove', (e) => {
 });
 
 el.svg.addEventListener('mouseup', () => {
+  if (panState) {
+    panState = null;
+    return;
+  }
   if (marqueeState) {
     if (marqueeState.moved) suppressNextCanvasClick = true;
     marqueeState = null;
@@ -1274,6 +1322,7 @@ el.svg.addEventListener('mouseup', () => {
 });
 
 el.svg.addEventListener('mouseleave', () => {
+  panState = null;
   if (marqueeState) {
     marqueeState = null;
     const stray = el.svg.querySelector('#marquee-rect');
@@ -1331,8 +1380,15 @@ function renderGraph() {
     hint.setAttribute('class', 'empty-graph-hint');
     hint.textContent = 'Nessun passaggio ancora — clicca "+ Nodo" o fai doppio click qui per iniziare';
     hint.style.pointerEvents = 'none';
-    el.svg.appendChild(hint);
+    el.svg.appendChild(hint); // outside the panned viewport group, always centered on screen
   }
+
+  // Everything graph-related lives in this panned group so the whole canvas can be
+  // scrolled when the graph is wider/taller than what's visible.
+  const viewport = document.createElementNS(SVG_NS, 'g');
+  viewport.setAttribute('class', 'graph-viewport');
+  viewport.setAttribute('transform', `translate(${state.pan.x}, ${state.pan.y})`);
+  el.svg.appendChild(viewport);
 
   for (const edge of state.graph.edges) {
     const from = state.graph.nodes.find((n) => n.id === edge.from);
@@ -1352,7 +1408,7 @@ function renderGraph() {
       onEdgeClick(edge);
     });
     line.addEventListener('contextmenu', (e) => onEdgeContextMenu(edge, e));
-    el.svg.appendChild(line);
+    viewport.appendChild(line);
   }
 
   for (const node of state.graph.nodes) {
@@ -1445,7 +1501,7 @@ function renderGraph() {
     });
     group.appendChild(infoGroup);
 
-    el.svg.appendChild(group);
+    viewport.appendChild(group);
   }
 }
 
