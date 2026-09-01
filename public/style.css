@@ -266,10 +266,11 @@ body {
   flex-direction: column;
 }
 .folder-header {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 8px;
+  padding: 7px 26px 7px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--ink-soft);
@@ -309,6 +310,10 @@ body {
   color: var(--ink-faint);
 }
 .folder-header .folder-delete {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   opacity: 0;
   border: none;
   background: none;
