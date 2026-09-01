@@ -20,8 +20,10 @@
   --danger-bg: #fdecea;
   --success: #2f9563;
   --success-bg: #e8f7ee;
-  --radius: 8px;
+  --radius-xs: 4px;
   --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
   --shadow-sm: 0 1px 2px rgba(33, 26, 44, 0.06);
   --shadow-md: 0 10px 28px rgba(33, 26, 44, 0.12);
   --canvas-dot: #ded2f2;
@@ -89,7 +91,7 @@ body {
   max-width: 340px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   padding: 32px 28px;
   text-align: center;
@@ -101,7 +103,7 @@ body {
 .login-brand-mark {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   margin-bottom: 6px;
 }
 .login-brand-mark svg { width: 26px; height: 26px; }
@@ -126,7 +128,7 @@ body {
   padding: 10px 16px;
   background: #171515;
   color: #fff;
-  border-radius: 8px;
+  border-radius: var(--radius);
   font-size: 14px;
   font-weight: 600;
   text-decoration: none;
@@ -156,7 +158,7 @@ body {
   font-size: 11.5px !important;
   color: var(--ink-faint) !important;
   background: var(--bg);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 8px 10px;
 }
 
@@ -182,7 +184,7 @@ body {
   width: 30px;
   height: 30px;
   flex-shrink: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--brand);
   display: flex;
   align-items: center;
@@ -313,7 +315,7 @@ body {
   color: var(--ink-faint);
   cursor: pointer;
   padding: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   display: flex;
 }
 .folder-header:hover .folder-delete {
@@ -384,7 +386,7 @@ body {
   color: var(--ink-faint);
   cursor: pointer;
   padding: 3px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   display: flex;
   flex-shrink: 0;
 }
@@ -628,7 +630,7 @@ body {
   letter-spacing: -0.01em;
 }
 .node-label.done {
-  fill: #2c7350;
+  fill: var(--success);
 }
 .node-label.locked {
   font-weight: 700;
@@ -658,7 +660,7 @@ body {
   stroke: var(--brand);
 }
 .edge-line.selected {
-  stroke: #e8590c;
+  stroke: var(--brand);
   stroke-width: 2.25;
 }
 .edge-arrow {
@@ -672,7 +674,7 @@ body {
   z-index: 1000;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-md);
   padding: 4px;
   min-width: 200px;
@@ -691,7 +693,7 @@ body {
   background: none;
   cursor: pointer;
   font: inherit;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   color: var(--ink);
 }
 .context-menu button svg { width: 14px; height: 14px; color: var(--ink-soft); }
@@ -718,7 +720,7 @@ body {
   z-index: 1001;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   padding: 16px;
   width: 290px;
@@ -748,7 +750,7 @@ body {
 .popover select {
   padding: 7px 9px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font: inherit;
   font-size: 13px;
   color: var(--ink);
@@ -785,7 +787,7 @@ body {
   gap: 2px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 2px;
 }
 .md-tab {
@@ -795,7 +797,7 @@ body {
   font-size: 11px;
   font-weight: 600;
   padding: 3px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   cursor: pointer;
   color: var(--ink-faint);
 }
@@ -810,7 +812,7 @@ body {
   overflow-y: auto;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--bg);
 }
 .md-preview:empty::before {
@@ -854,7 +856,7 @@ body {
   background: var(--brand-mid);
   color: var(--brand-dark);
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   font-size: 12px;
   font-family: 'SFMono-Regular', Consolas, monospace;
 }
@@ -862,7 +864,7 @@ body {
   background: var(--code-block-bg);
   color: var(--code-block-ink);
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow-x: auto;
   margin: 0 0 8px;
 }
@@ -893,7 +895,7 @@ body {
   border: 1px solid var(--border);
   padding: 4px 8px;
 }
-.markdown-body img { border-radius: 6px; }
+.markdown-body img { border-radius: var(--radius-sm); }
 
 .popover input.locked {
   background: var(--bg);
@@ -915,7 +917,7 @@ body {
 .btn-primary,
 .btn-secondary {
   padding: 7px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -961,7 +963,7 @@ body {
   width: 26px;
   height: 26px;
   flex-shrink: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--brand-light);
   color: var(--brand);
   display: flex;
@@ -1003,7 +1005,7 @@ body {
   justify-content: center;
   border: 1px solid var(--border);
   background: var(--surface);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--ink-soft);
   cursor: pointer;
 }
@@ -1083,7 +1085,7 @@ body {
   max-width: 320px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   padding: 24px;
   text-align: center;
@@ -1123,7 +1125,7 @@ body {
 }
 .btn-confirm-danger {
   padding: 7px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
