@@ -1266,14 +1266,18 @@ el.svg.addEventListener('mouseleave', () => {
   }
 });
 
-function rectBorderPoint(node, towardX, towardY) {
+// Edges only ever latch onto the midpoint of one side (N/S/E/W), never an
+// arbitrary point along the border, so every connection lines up with the
+// others instead of hitting odd diagonal spots on the node.
+function cardinalPoint(node, towardX, towardY) {
   const w = nodeWidth(node) / 2;
   const h = NODE_HEIGHT / 2;
   const dx = towardX - node.x;
   const dy = towardY - node.y;
-  if (dx === 0 && dy === 0) return { x: node.x, y: node.y };
-  const scale = 1 / Math.max(Math.abs(dx) / w, Math.abs(dy) / h);
-  return { x: node.x + dx * scale, y: node.y + dy * scale };
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return { x: node.x + (dx >= 0 ? w : -w), y: node.y };
+  }
+  return { x: node.x, y: node.y + (dy >= 0 ? h : -h) };
 }
 
 function svgIconGroup(name, cx, cy, size, className) {
@@ -1315,8 +1319,8 @@ function renderGraph() {
     const from = state.graph.nodes.find((n) => n.id === edge.from);
     const to = state.graph.nodes.find((n) => n.id === edge.to);
     if (!from || !to) continue;
-    const start = rectBorderPoint(from, to.x, to.y);
-    const end = rectBorderPoint(to, from.x, from.y);
+    const start = cardinalPoint(from, to.x, to.y);
+    const end = cardinalPoint(to, from.x, from.y);
     const line = document.createElementNS(SVG_NS, 'line');
     line.setAttribute('x1', start.x);
     line.setAttribute('y1', start.y);
