@@ -407,10 +407,10 @@ function renderFolderGroup(folder, tickets) {
   const header = document.createElement('div');
   header.className = 'folder-header' + (collapsed ? ' collapsed' : '');
   header.innerHTML = `
-    <span class="chevron">${svgIcon('chevronDown', 14)}</span>
     <span class="folder-icon">${svgIcon('folder', 14)}</span>
     <span class="folder-name"></span>
     <span class="folder-count"></span>
+    <span class="chevron">${svgIcon('chevronDown', 14)}</span>
     ${folder ? `<button class="folder-delete" title="Elimina cartella">${svgIcon('trash', 13)}</button>` : ''}
   `;
   header.querySelector('.folder-name').textContent = folder ? folder.name : 'Senza cartella';

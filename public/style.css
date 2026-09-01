@@ -270,7 +270,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 26px 7px 8px;
+  padding: 7px 48px 7px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--ink-soft);
