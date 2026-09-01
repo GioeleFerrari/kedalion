@@ -1,125 +1,206 @@
-const fs = require('fs');
-const path = require('path');
+const { db } = require('./db');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const TICKETS_DIR = path.join(DATA_DIR, 'tickets');
-const GRAPHS_DIR = path.join(DATA_DIR, 'graphs');
-const FOLDERS_DIR = path.join(DATA_DIR, 'folders');
-
-for (const dir of [TICKETS_DIR, GRAPHS_DIR, FOLDERS_DIR]) {
-  fs.mkdirSync(dir, { recursive: true });
-}
-
-function ticketPath(id) {
-  return path.join(TICKETS_DIR, `${id}.json`);
-}
-
-function graphPath(id) {
-  return path.join(GRAPHS_DIR, `${id}.json`);
-}
-
-function folderPath(id) {
-  return path.join(FOLDERS_DIR, `${id}.json`);
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
 function isValidId(id) {
   return typeof id === 'string' && /^[a-zA-Z0-9_-]+$/.test(id);
 }
 
-function genId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+// --- Users ---
+
+function findUserByGithubId(githubId) {
+  return db.prepare('SELECT * FROM users WHERE github_id = ?').get(String(githubId));
 }
 
-function listTickets() {
-  return fs
-    .readdirSync(TICKETS_DIR)
-    .filter((f) => f.endsWith('.json'))
-    .map((f) => JSON.parse(fs.readFileSync(path.join(TICKETS_DIR, f), 'utf8')))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+function getUserById(id) {
+  return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
 }
 
-function getTicket(id) {
-  if (!isValidId(id) || !fs.existsSync(ticketPath(id))) return null;
-  return JSON.parse(fs.readFileSync(ticketPath(id), 'utf8'));
-}
-
-function createTicket({ title, description, folderId }) {
-  const id = genId();
+function getOrCreateLocalUser() {
+  const existing = findUserByGithubId('legacy-local');
+  if (existing) return existing;
   const now = new Date().toISOString();
-  const ticket = {
-    id,
-    title,
-    description: description || '',
-    status: 'open',
-    folderId: folderId && isValidId(folderId) && fs.existsSync(folderPath(folderId)) ? folderId : null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  fs.writeFileSync(ticketPath(id), JSON.stringify(ticket, null, 2));
-  fs.writeFileSync(graphPath(id), JSON.stringify({ nodes: [], edges: [] }, null, 2));
-  return ticket;
+  const info = db
+    .prepare('INSERT INTO users (github_id, username, avatar_url, created_at) VALUES (?, ?, ?, ?)')
+    .run('legacy-local', 'Ticket locali', null, now);
+  return getUserById(info.lastInsertRowid);
 }
 
-function updateTicket(id, updates) {
-  const ticket = getTicket(id);
-  if (!ticket) return null;
-  const updated = { ...ticket, ...updates, id: ticket.id, createdAt: ticket.createdAt, updatedAt: new Date().toISOString() };
-  fs.writeFileSync(ticketPath(id), JSON.stringify(updated, null, 2));
-  return updated;
-}
-
-function deleteTicket(id) {
-  if (!isValidId(id)) return false;
-  if (fs.existsSync(ticketPath(id))) fs.unlinkSync(ticketPath(id));
-  if (fs.existsSync(graphPath(id))) fs.unlinkSync(graphPath(id));
-  return true;
-}
-
-function listFolders() {
-  return fs
-    .readdirSync(FOLDERS_DIR)
-    .filter((f) => f.endsWith('.json'))
-    .map((f) => JSON.parse(fs.readFileSync(path.join(FOLDERS_DIR, f), 'utf8')))
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function createFolder({ name }) {
-  const id = genId();
-  const now = new Date().toISOString();
-  const folder = { id, name, createdAt: now };
-  fs.writeFileSync(folderPath(id), JSON.stringify(folder, null, 2));
-  return folder;
-}
-
-function deleteFolder(id) {
-  if (!isValidId(id)) return false;
-  if (fs.existsSync(folderPath(id))) fs.unlinkSync(folderPath(id));
-  for (const ticket of listTickets()) {
-    if (ticket.folderId === id) updateTicket(ticket.id, { folderId: null });
+function findOrCreateUser({ githubId, username, avatarUrl }) {
+  const existing = findUserByGithubId(githubId);
+  if (existing) {
+    db.prepare('UPDATE users SET username = ?, avatar_url = ? WHERE id = ?').run(
+      username,
+      avatarUrl,
+      existing.id
+    );
+    return getUserById(existing.id);
   }
+  const now = new Date().toISOString();
+  const info = db
+    .prepare('INSERT INTO users (github_id, username, avatar_url, created_at) VALUES (?, ?, ?, ?)')
+    .run(String(githubId), username, avatarUrl, now);
+  return getUserById(info.lastInsertRowid);
+}
+
+function toUserJson(user) {
+  return { id: user.id, username: user.username, avatarUrl: user.avatar_url };
+}
+
+// --- Tickets ---
+
+function ticketRowToJson(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    folderId: row.folder_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function listTickets(userId) {
+  return db
+    .prepare('SELECT * FROM tickets WHERE user_id = ? ORDER BY created_at DESC')
+    .all(userId)
+    .map(ticketRowToJson);
+}
+
+function getTicket(userId, id) {
+  if (!isValidId(id)) return null;
+  const row = db.prepare('SELECT * FROM tickets WHERE id = ? AND user_id = ?').get(id, userId);
+  return row ? ticketRowToJson(row) : null;
+}
+
+function createTicket(userId, { title, description, folderId }) {
+  const id = genId();
+  const now = new Date().toISOString();
+  const validFolderId =
+    folderId && isValidId(folderId) && db.prepare('SELECT 1 FROM folders WHERE id = ? AND user_id = ?').get(folderId, userId)
+      ? folderId
+      : null;
+  db.prepare(
+    'INSERT INTO tickets (id, user_id, folder_id, title, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, userId, validFolderId, title, description || '', 'open', now, now);
+  db.prepare('INSERT INTO graphs (ticket_id, data) VALUES (?, ?)').run(
+    id,
+    JSON.stringify({ nodes: [], edges: [] })
+  );
+  return getTicket(userId, id);
+}
+
+function updateTicket(userId, id, updates) {
+  const existing = getTicket(userId, id);
+  if (!existing) return null;
+
+  const fields = [];
+  const values = [];
+  if (updates.title !== undefined) {
+    fields.push('title = ?');
+    values.push(updates.title);
+  }
+  if (updates.description !== undefined) {
+    fields.push('description = ?');
+    values.push(updates.description);
+  }
+  if (updates.status !== undefined) {
+    fields.push('status = ?');
+    values.push(updates.status);
+  }
+  if (updates.folderId !== undefined) {
+    const validFolderId =
+      updates.folderId && isValidId(updates.folderId) &&
+      db.prepare('SELECT 1 FROM folders WHERE id = ? AND user_id = ?').get(updates.folderId, userId)
+        ? updates.folderId
+        : null;
+    fields.push('folder_id = ?');
+    values.push(validFolderId);
+  }
+  fields.push('updated_at = ?');
+  values.push(new Date().toISOString());
+
+  values.push(id, userId);
+  db.prepare(`UPDATE tickets SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`).run(...values);
+  return getTicket(userId, id);
+}
+
+function deleteTicket(userId, id) {
+  if (!isValidId(id)) return false;
+  db.prepare('DELETE FROM tickets WHERE id = ? AND user_id = ?').run(id, userId);
   return true;
 }
 
-function getGraph(id) {
+// --- Graphs ---
+
+function getGraph(userId, id) {
   if (!isValidId(id)) return null;
-  if (!fs.existsSync(graphPath(id))) {
-    if (!fs.existsSync(ticketPath(id))) return null;
+  const ticket = db.prepare('SELECT 1 FROM tickets WHERE id = ? AND user_id = ?').get(id, userId);
+  if (!ticket) return null;
+  const row = db.prepare('SELECT data FROM graphs WHERE ticket_id = ?').get(id);
+  if (!row) return { nodes: [], edges: [] };
+  try {
+    return JSON.parse(row.data);
+  } catch {
     return { nodes: [], edges: [] };
   }
-  return JSON.parse(fs.readFileSync(graphPath(id), 'utf8'));
 }
 
-function saveGraph(id, graph) {
-  if (!isValidId(id) || !fs.existsSync(ticketPath(id))) return null;
+function saveGraph(userId, id, graph) {
+  if (!isValidId(id)) return null;
+  const ticket = db.prepare('SELECT 1 FROM tickets WHERE id = ? AND user_id = ?').get(id, userId);
+  if (!ticket) return null;
   const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
   const edges = Array.isArray(graph.edges) ? graph.edges : [];
   const clean = { nodes, edges };
-  fs.writeFileSync(graphPath(id), JSON.stringify(clean, null, 2));
+  db.prepare(
+    'INSERT INTO graphs (ticket_id, data) VALUES (?, ?) ON CONFLICT(ticket_id) DO UPDATE SET data = excluded.data'
+  ).run(id, JSON.stringify(clean));
+  db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(new Date().toISOString(), id);
   return clean;
+}
+
+// --- Folders ---
+
+function folderRowToJson(row) {
+  return { id: row.id, name: row.name, createdAt: row.created_at };
+}
+
+function listFolders(userId) {
+  return db
+    .prepare('SELECT * FROM folders WHERE user_id = ? ORDER BY name COLLATE NOCASE')
+    .all(userId)
+    .map(folderRowToJson);
+}
+
+function createFolder(userId, { name }) {
+  const id = genId();
+  const now = new Date().toISOString();
+  db.prepare('INSERT INTO folders (id, user_id, name, created_at) VALUES (?, ?, ?, ?)').run(
+    id,
+    userId,
+    name,
+    now
+  );
+  return folderRowToJson({ id, name, created_at: now });
+}
+
+function deleteFolder(userId, id) {
+  if (!isValidId(id)) return false;
+  db.prepare('UPDATE tickets SET folder_id = NULL WHERE folder_id = ? AND user_id = ?').run(id, userId);
+  db.prepare('DELETE FROM folders WHERE id = ? AND user_id = ?').run(id, userId);
+  return true;
 }
 
 module.exports = {
   isValidId,
+  findOrCreateUser,
+  getOrCreateLocalUser,
+  getUserById,
+  toUserJson,
   listTickets,
   getTicket,
   createTicket,

@@ -35,6 +35,95 @@ body {
   height: 100vh;
 }
 
+/* --- Login screen --- */
+
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 20% 20%, var(--brand-mid) 0%, transparent 45%),
+    radial-gradient(circle at 80% 80%, var(--brand-light) 0%, transparent 45%),
+    var(--bg);
+  padding: 20px;
+}
+.login-card {
+  width: 100%;
+  max-width: 340px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+  padding: 32px 28px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.login-brand-mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
+.login-brand-mark svg { width: 26px; height: 26px; }
+.login-card h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.login-card p {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.github-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  background: #171515;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid #171515;
+  transition: background 0.15s;
+}
+.github-btn:hover {
+  background: #2b2b2b;
+}
+.github-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+.link-btn {
+  margin-top: 12px;
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-btn:hover {
+  color: var(--brand);
+}
+.login-config-hint {
+  margin-top: 14px !important;
+  font-size: 11.5px !important;
+  color: var(--ink-faint) !important;
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
 /* --- Sidebar --- */
 
 .sidebar {
@@ -276,6 +365,40 @@ body {
   padding: 12px 8px;
   color: var(--ink-faint);
   font-size: 12.5px;
+}
+
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+.user-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.user-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* --- Main content --- */

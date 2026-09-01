@@ -56,6 +56,18 @@ const el = {
   folderForm: document.getElementById('folder-form'),
   folderFormName: document.getElementById('folder-form-name'),
   folderFormCancel: document.getElementById('folder-form-cancel'),
+
+  loginScreen: document.getElementById('login-screen'),
+  appRoot: document.getElementById('app-root'),
+  loginBrandIcon: document.getElementById('login-brand-icon'),
+  githubLoginBtn: document.getElementById('github-login-btn'),
+  githubLoginIcon: document.getElementById('github-login-icon'),
+  localLoginBtn: document.getElementById('local-login-btn'),
+  loginConfigHint: document.getElementById('login-config-hint'),
+  userAvatar: document.getElementById('user-avatar'),
+  userAvatarFallback: document.getElementById('user-avatar-fallback'),
+  userName: document.getElementById('user-name'),
+  logoutBtn: document.getElementById('logout-btn'),
 };
 
 const NODE_HEIGHT = 48;
@@ -80,6 +92,10 @@ el.newTicketBtn.innerHTML = svgIcon('plus', 16);
 el.searchBtn.innerHTML = svgIcon('search', 16);
 el.newFolderBtn.innerHTML = svgIcon('folderPlus', 16);
 el.nodeViewEdit.innerHTML = svgIcon('pencil', 13);
+el.loginBrandIcon.innerHTML = svgIcon('ticket', 26);
+el.githubLoginIcon.innerHTML = svgIconSolid('github', 18);
+el.logoutBtn.innerHTML = svgIcon('x', 13);
+el.logoutBtn.title = 'Esci';
 document.querySelectorAll('.btn-icon[data-icon]').forEach((elm) => {
   elm.innerHTML = svgIcon(elm.dataset.icon, 14);
 });
@@ -89,6 +105,10 @@ async function api(path, opts) {
     headers: { 'Content-Type': 'application/json' },
     ...opts,
   });
+  if (res.status === 401) {
+    window.location.reload();
+    throw new Error('not authenticated');
+  }
   if (!res.ok) throw new Error(`API error ${res.status}`);
   if (res.status === 204) return null;
   return res.json();
@@ -229,7 +249,9 @@ function renderTicketTree() {
     el.ticketTree.appendChild(renderFolderGroup(folder, items));
   }
 
-  if (unfiled.length > 0 || state.folders.length === 0) {
+  // Always render the "unfiled" bucket (even empty) so it stays a valid drag-and-drop
+  // target for moving a ticket out of a folder; only hide it while a search matches nothing.
+  if (!(query && unfiled.length === 0)) {
     el.ticketTree.appendChild(renderFolderGroup(null, unfiled));
   }
 }
@@ -1099,4 +1121,51 @@ function isSelected(type, id) {
   return state.selected && state.selected.type === type && state.selected.id === id;
 }
 
-loadAll();
+// --- Auth bootstrap ---
+
+function showLoginScreen(githubLoginEnabled) {
+  el.appRoot.hidden = true;
+  el.loginScreen.hidden = false;
+  const enabled = githubLoginEnabled !== false;
+  el.githubLoginBtn.hidden = !enabled;
+  el.loginConfigHint.hidden = enabled;
+}
+
+function showApp(user) {
+  el.loginScreen.hidden = true;
+  el.appRoot.hidden = false;
+  el.userName.textContent = user.username;
+  if (user.avatarUrl) {
+    el.userAvatar.src = user.avatarUrl;
+    el.userAvatar.hidden = false;
+    el.userAvatarFallback.hidden = true;
+  } else {
+    el.userAvatarFallback.textContent = user.username.slice(0, 2);
+    el.userAvatarFallback.hidden = false;
+    el.userAvatar.hidden = true;
+  }
+}
+
+el.localLoginBtn.addEventListener('click', () => {
+  window.location.href = '/auth/local';
+});
+
+el.logoutBtn.addEventListener('click', async () => {
+  await fetch('/auth/logout', { method: 'POST' });
+  window.location.reload();
+});
+
+async function bootstrap() {
+  const meRes = await fetch('/api/me');
+  if (meRes.ok) {
+    const user = await meRes.json();
+    showApp(user);
+    loadAll();
+    return;
+  }
+  const configRes = await fetch('/api/config');
+  const config = configRes.ok ? await configRes.json() : { githubLoginEnabled: false };
+  showLoginScreen(config.githubLoginEnabled);
+}
+
+bootstrap();

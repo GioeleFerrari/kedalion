@@ -11,7 +11,23 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
 </head>
 <body>
-  <div class="layout">
+  <div id="login-screen" class="login-screen" hidden>
+    <div class="login-card">
+      <span class="brand-mark login-brand-mark" id="login-brand-icon"></span>
+      <h1>Ticket Guide</h1>
+      <p>Organizza i tuoi ticket e i passaggi per risolverli, come grafo.</p>
+      <a id="github-login-btn" class="github-btn" href="/auth/github">
+        <span id="github-login-icon"></span>
+        Accedi con GitHub
+      </a>
+      <button id="local-login-btn" class="link-btn">Continua senza account (dati salvati solo su questo computer)</button>
+      <p id="login-config-hint" class="login-config-hint" hidden>
+        Login con GitHub non ancora configurato su questo server: vedi il README per abilitarlo.
+      </p>
+    </div>
+  </div>
+
+  <div id="app-root" class="layout" hidden>
     <aside class="sidebar">
       <div class="sidebar-brand">
         <span class="brand-mark" id="brand-icon"></span>
@@ -32,6 +48,13 @@
       </div>
 
       <div id="ticket-tree" class="ticket-tree"></div>
+
+      <div class="sidebar-footer">
+        <img id="user-avatar" class="user-avatar" alt="" hidden />
+        <span id="user-avatar-fallback" class="user-avatar user-avatar-fallback" hidden></span>
+        <span id="user-name" class="user-name"></span>
+        <button id="logout-btn" class="icon-btn-sm" title="Esci"></button>
+      </div>
     </aside>
 
     <main class="content">
