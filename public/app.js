@@ -721,6 +721,13 @@ el.importFileInput.addEventListener('change', async () => {
       body: JSON.stringify({ title, description }),
     });
 
+    if (importedTicket.status === 'done') {
+      await api(`/api/tickets/${created.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'done' }),
+      });
+    }
+
     const importedGraph = data.graph || {};
     const nodes = Array.isArray(importedGraph.nodes) ? importedGraph.nodes : [];
     const edges = Array.isArray(importedGraph.edges) ? importedGraph.edges : [];
@@ -1074,6 +1081,7 @@ document.addEventListener('keydown', (e) => {
     state.mode = 'idle';
     state.linkFirst = null;
     state.multiSelected.clear();
+    state.selected = null;
     updateLinkModeUI();
     renderGraph();
     closeAllPopovers();
@@ -1568,6 +1576,14 @@ function renderGraph() {
       e.stopPropagation();
       if (suppressNextClick) {
         suppressNextClick = false;
+        return;
+      }
+      if (state.mode !== 'link' && state.multiSelected.size > 0) {
+        // A plain click (no drag) on a node that's part of an active multi-selection
+        // just clears the selection, instead of silently toggling "done" on whichever
+        // single node happened to be under the cursor.
+        state.multiSelected.clear();
+        renderGraph();
         return;
       }
       onNodeClick(node);
