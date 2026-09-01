@@ -1296,7 +1296,7 @@ function renderGraph() {
   defs.innerHTML = `
     <marker id="arrowhead" markerWidth="9" markerHeight="9" refX="7.6" refY="4.5" orient="auto"
       markerUnits="userSpaceOnUse">
-      <path d="M0,0.6 L9,4.5 L0,8.4 L2.4,4.5 Z" class="edge-arrow" />
+      <path d="M0,0.6 L9,4.5 L0,8.4 Z" class="edge-arrow" />
     </marker>
   `;
   el.svg.appendChild(defs);
