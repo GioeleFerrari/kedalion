@@ -339,12 +339,26 @@ body {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 10px;
+  gap: 10px;
+  padding: 10px 12px 10px 14px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
 }
+.ticket-item::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--ink-faint);
+  opacity: 0.5;
+}
+.ticket-item.status-open::before { background: var(--brand); opacity: 1; }
+.ticket-item.status-done::before { background: var(--success); opacity: 1; }
 .ticket-item:hover {
   background: var(--bg);
 }
@@ -352,15 +366,6 @@ body {
   background: var(--brand-light);
   border-color: var(--brand-mid);
 }
-.ticket-item .status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ink-faint);
-  flex-shrink: 0;
-}
-.ticket-item.status-open .status-dot { background: var(--brand); }
-.ticket-item.status-done .status-dot { background: var(--success); }
 .ticket-item .t-info {
   flex: 1;
   min-width: 0;
@@ -372,10 +377,30 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.ticket-item .t-status {
+.ticket-item .t-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+.ticket-item .t-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+.ticket-item.status-open .t-badge {
+  color: var(--brand-dark);
+  background: var(--brand-light);
+}
+.ticket-item.status-done .t-badge {
+  color: var(--success);
+  background: var(--success-bg);
+}
+.ticket-item .t-time {
   font-size: 11px;
   color: var(--ink-faint);
-  text-transform: capitalize;
 }
 .ticket-item .delete-ticket {
   opacity: 0;

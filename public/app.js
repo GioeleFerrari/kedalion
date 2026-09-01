@@ -378,20 +378,39 @@ function renderFolderGroup(folder, tickets) {
   return wrapper;
 }
 
+function formatRelativeTime(iso) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  if (diffMin < 1) return 'adesso';
+  if (diffMin < 60) return `${diffMin} min fa`;
+  const diffH = Math.round(diffMin / 60);
+  if (diffH < 24) return `${diffH} h fa`;
+  const diffD = Math.round(diffH / 24);
+  if (diffD === 1) return 'ieri';
+  if (diffD < 7) return `${diffD} g fa`;
+  if (diffD < 30) return `${Math.round(diffD / 7)} sett fa`;
+  if (diffD < 365) return `${Math.round(diffD / 30)} mesi fa`;
+  const years = Math.round(diffD / 365);
+  return `${years} ${years === 1 ? 'anno' : 'anni'} fa`;
+}
+
 function renderTicketItem(t) {
   const item = document.createElement('div');
   const statusClass = t.status === 'done' ? 'status-done' : 'status-open';
   item.className = `ticket-item ${statusClass}` + (t.id === state.currentTicketId ? ' active' : '');
   item.innerHTML = `
-    <span class="status-dot"></span>
     <div class="t-info">
       <div class="t-title"></div>
-      <div class="t-status"></div>
+      <div class="t-meta">
+        <span class="t-badge"></span>
+        <span class="t-time"></span>
+      </div>
     </div>
     <button class="delete-ticket" title="Elimina ticket">${svgIcon('trash', 13)}</button>
   `;
   item.querySelector('.t-title').textContent = t.title;
-  item.querySelector('.t-status').textContent = t.status;
+  item.querySelector('.t-badge').textContent = t.status === 'done' ? 'Completato' : 'Aperto';
+  item.querySelector('.t-time').textContent = formatRelativeTime(t.updatedAt || t.createdAt);
   item.setAttribute('draggable', 'true');
   item.addEventListener('dragstart', (e) => {
     e.dataTransfer.setData('text/plain', t.id);
