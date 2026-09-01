@@ -447,6 +447,15 @@ async function selectTicket(id) {
   updateLinkModeUI();
   renderTicketTree();
 
+  // Stale interaction state from the previous ticket's graph (e.g. a drag whose
+  // "suppress the next click" flag never got consumed because you switched
+  // tickets right after) would otherwise eat the first click on the new graph.
+  dragState = null;
+  groupDragState = null;
+  marqueeState = null;
+  suppressNextClick = false;
+  suppressNextCanvasClick = false;
+
   const ticket = state.tickets.find((t) => t.id === id) || (await api(`/api/tickets/${id}`));
   el.ticketTitle.textContent = ticket.title;
   el.ticketDesc.innerHTML = renderMarkdown(ticket.description);
@@ -1357,7 +1366,7 @@ function renderGraph() {
     }
     group.appendChild(rect);
 
-    const badgeKind = node.nodeType || (node.done ? 'done' : null);
+    const badgeKind = node.nodeType || null;
     if (badgeKind) {
       const badgeCx = node.x - w / 2 + 22;
       const badge = document.createElementNS(SVG_NS, 'g');
@@ -1368,7 +1377,7 @@ function renderGraph() {
       badgeCircle.setAttribute('cy', node.y);
       badgeCircle.setAttribute('r', 10);
       badge.appendChild(badgeCircle);
-      const badgeIconName = badgeKind === 'start' ? 'play' : badgeKind === 'end' ? 'flag' : 'check';
+      const badgeIconName = badgeKind === 'start' ? 'play' : 'flag';
       const badgeIcon = svgIconGroup(badgeIconName, badgeCx, node.y, 12, 'node-badge-icon');
       if (badgeIconName === 'play') {
         badgeIcon.setAttribute('fill', 'currentColor');

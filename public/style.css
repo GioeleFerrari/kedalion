@@ -629,9 +629,6 @@ body {
   stroke: #fff;
   stroke-width: 1.5;
 }
-.node-badge.done circle {
-  fill: var(--success);
-}
 .node-badge.start circle {
   fill: var(--success);
 }
