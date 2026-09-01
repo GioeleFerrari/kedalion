@@ -38,13 +38,14 @@
   </div>
 
   <div id="app-root" class="layout" hidden>
-    <aside class="sidebar">
+    <aside id="sidebar" class="sidebar">
       <div class="sidebar-brand">
         <span class="brand-mark" id="brand-icon"></span>
         <div>
           <h1>Kedalion</h1>
           <p class="sidebar-subtitle">Panoramica ticket</p>
         </div>
+        <button type="button" id="sidebar-collapse-btn" class="icon-btn-sm sidebar-collapse-btn" title="Comprimi sidebar (Ctrl+B)"></button>
       </div>
 
       <div class="sidebar-toolbar">
@@ -69,6 +70,8 @@
         <button id="logout-btn" class="icon-btn-sm" title="Esci"></button>
       </div>
     </aside>
+
+    <button type="button" id="sidebar-expand-btn" class="icon-btn sidebar-expand-btn" title="Espandi sidebar (Ctrl+B)" hidden></button>
 
     <main class="content">
       <div id="empty-state" class="empty-state">

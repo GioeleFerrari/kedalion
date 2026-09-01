@@ -179,6 +179,18 @@ body {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  transition: width 0.18s ease, border-color 0.18s ease;
+}
+.sidebar.collapsed {
+  width: 0;
+  border-right-color: transparent;
+}
+.sidebar-expand-btn {
+  position: fixed;
+  top: 18px;
+  left: 20px;
+  z-index: 50;
 }
 
 .sidebar-brand {
@@ -187,6 +199,13 @@ body {
   gap: 10px;
   padding: 18px 20px;
   border-bottom: 1px solid var(--border);
+}
+.sidebar-brand > div {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-collapse-btn {
+  flex-shrink: 0;
 }
 .brand-mark {
   width: 30px;

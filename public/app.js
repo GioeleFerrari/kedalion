@@ -82,6 +82,9 @@ const el = {
   userName: document.getElementById('user-name'),
   logoutBtn: document.getElementById('logout-btn'),
   themeToggleBtn: document.getElementById('theme-toggle-btn'),
+  sidebar: document.getElementById('sidebar'),
+  sidebarCollapseBtn: document.getElementById('sidebar-collapse-btn'),
+  sidebarExpandBtn: document.getElementById('sidebar-expand-btn'),
 
   importBtn: document.getElementById('import-btn'),
   importFileInput: document.getElementById('import-file-input'),
@@ -241,6 +244,38 @@ el.themeToggleBtn.addEventListener('click', () => {
     // Storage may be unavailable (private browsing, quota); the theme still applies for this session.
   }
 });
+
+// --- Sidebar collapse/expand ---
+
+const SIDEBAR_STORAGE_KEY = 'kedalion-sidebar-collapsed';
+
+function applySidebarCollapsed(collapsed) {
+  el.sidebar.classList.toggle('collapsed', collapsed);
+  el.sidebarExpandBtn.hidden = !collapsed;
+}
+
+function setSidebarCollapsed(collapsed) {
+  applySidebarCollapsed(collapsed);
+  try {
+    localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? '1' : '0');
+  } catch (e) {
+    // Storage may be unavailable; the state still applies for this session.
+  }
+}
+
+el.sidebarCollapseBtn.innerHTML = svgIcon('panelLeft', 14);
+el.sidebarExpandBtn.innerHTML = svgIcon('panelLeft', 16);
+
+let sidebarCollapsedInit = false;
+try {
+  sidebarCollapsedInit = localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1';
+} catch (e) {
+  // ignore
+}
+applySidebarCollapsed(sidebarCollapsedInit);
+
+el.sidebarCollapseBtn.addEventListener('click', () => setSidebarCollapsed(true));
+el.sidebarExpandBtn.addEventListener('click', () => setSidebarCollapsed(false));
 
 async function api(path, opts) {
   const res = await fetch(path, {
@@ -1075,6 +1110,9 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (el.searchBox.hidden) el.searchBtn.click();
     else el.searchInput.focus();
+  } else if (e.key.toLowerCase() === 'b' && (e.ctrlKey || e.metaKey) && !isTypingInField() && !el.appRoot.hidden) {
+    e.preventDefault();
+    setSidebarCollapsed(!el.sidebar.classList.contains('collapsed'));
   }
 });
 
