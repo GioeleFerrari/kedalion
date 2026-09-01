@@ -105,6 +105,13 @@ app.put('/api/tickets/:id/graph', (req, res) => {
   res.json(graph);
 });
 
+// Keep API error responses JSON (e.g. malformed request bodies), never Express's default HTML page.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  console.error('Unhandled request error:', err.message);
+  res.status(err.status || 400).json({ error: 'invalid request' });
+});
+
 app.listen(PORT, () => {
   console.log(`Kedalion in ascolto su http://localhost:${PORT}`);
   if (!auth.isConfigured()) {

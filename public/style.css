@@ -24,6 +24,37 @@
   --radius-sm: 6px;
   --shadow-sm: 0 1px 2px rgba(33, 26, 44, 0.06);
   --shadow-md: 0 10px 28px rgba(33, 26, 44, 0.12);
+  --canvas-dot: #ded2f2;
+  --node-success-border: #b7e4c7;
+  --node-danger-border: #f1c2ba;
+  --edge-color: #cabce6;
+  --code-block-bg: #211a2c;
+  --code-block-ink: #f4f1fb;
+}
+
+:root[data-theme="dark"] {
+  --brand: #9b6bd6;
+  --brand-dark: #c9a8f0;
+  --brand-light: #2c2338;
+  --brand-mid: #372b46;
+  --ink: #f1eef7;
+  --ink-soft: #b9adcb;
+  --ink-faint: #857aa0;
+  --border: #362b45;
+  --bg: #15111d;
+  --surface: #1e1828;
+  --danger: #ff7a70;
+  --danger-bg: #3a1f22;
+  --success: #57d38c;
+  --success-bg: #1c3527;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.55);
+  --canvas-dot: #33283f;
+  --node-success-border: #2f6e4a;
+  --node-danger-border: #7a3c39;
+  --edge-color: #55496b;
+  --code-block-bg: #0e0b14;
+  --code-block-ink: #f4f1fb;
 }
 
 body {
@@ -325,7 +356,7 @@ body {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--brand-faint, #c9bde3);
+  background: var(--ink-faint);
   flex-shrink: 0;
 }
 .ticket-item.status-open .status-dot { background: var(--brand); }
@@ -493,7 +524,7 @@ body {
 .btn.active .btn-icon { color: #fff; }
 .btn-danger-outline {
   color: var(--danger);
-  border-color: #f2c8c2;
+  border-color: var(--node-danger-border);
 }
 .btn-danger-outline .btn-icon { color: var(--danger); }
 .btn-danger-outline:hover {
@@ -509,7 +540,7 @@ body {
   flex: 1;
   width: 100%;
   background:
-    radial-gradient(circle, #ded2f2 1px, transparent 1px) 0 0 / 24px 24px,
+    radial-gradient(circle, var(--canvas-dot) 1px, transparent 1px) 0 0 / 24px 24px,
     var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -534,13 +565,13 @@ body {
 }
 .node-rect.done {
   fill: var(--success-bg);
-  stroke: #b7e4c7;
+  stroke: var(--node-success-border);
 }
 .node-rect.start {
-  stroke: #b7e4c7;
+  stroke: var(--node-success-border);
 }
 .node-rect.end {
-  stroke: #f1c2ba;
+  stroke: var(--node-danger-border);
 }
 .node-rect.selected {
   stroke: var(--brand);
@@ -610,7 +641,7 @@ body {
 }
 
 .edge-line {
-  stroke: #cabce6;
+  stroke: var(--edge-color);
   stroke-width: 1.5;
   cursor: pointer;
   transition: stroke 0.15s, stroke-width 0.15s;
@@ -623,7 +654,7 @@ body {
   stroke-width: 2.25;
 }
 .edge-arrow {
-  fill: #cabce6;
+  fill: var(--edge-color);
 }
 
 /* --- Context menu --- */
@@ -811,8 +842,8 @@ body {
   font-family: 'SFMono-Regular', Consolas, monospace;
 }
 .markdown-body pre {
-  background: var(--ink);
-  color: #f4f1fb;
+  background: var(--code-block-bg);
+  color: var(--code-block-ink);
   padding: 10px 12px;
   border-radius: 8px;
   overflow-x: auto;
@@ -956,4 +987,37 @@ body {
 }
 .ticket-item.dragging {
   opacity: 0.5;
+}
+
+/* --- Toast notifications --- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 1200;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  max-width: 360px;
+  text-align: center;
+  animation: toast-in 0.15s ease-out;
+}
+.toast.error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.toast.success {
+  border-color: var(--success);
+  color: var(--success);
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }

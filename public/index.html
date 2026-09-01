@@ -4,6 +4,16 @@
 <meta charset="utf-8" />
 <title>Kêdalíôn</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<script>
+  // Applied before first paint to avoid a flash of the wrong theme.
+  (function () {
+    try {
+      var stored = localStorage.getItem('kedalion-theme');
+      var theme = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    } catch (e) {}
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
@@ -41,6 +51,8 @@
         <button id="new-ticket-btn" class="icon-btn" title="Nuovo ticket" aria-label="Nuovo ticket"></button>
         <button id="search-btn" class="icon-btn" title="Cerca ticket" aria-label="Cerca ticket"></button>
         <button id="new-folder-btn" class="icon-btn" title="Nuova cartella" aria-label="Nuova cartella"></button>
+        <button id="import-btn" class="icon-btn" title="Importa ticket" aria-label="Importa ticket"></button>
+        <input id="import-file-input" type="file" accept=".json,application/json" hidden />
       </div>
 
       <div id="search-box" class="search-box" hidden>
@@ -53,6 +65,7 @@
         <img id="user-avatar" class="user-avatar" alt="" hidden />
         <span id="user-avatar-fallback" class="user-avatar user-avatar-fallback" hidden></span>
         <span id="user-name" class="user-name"></span>
+        <button id="theme-toggle-btn" class="icon-btn-sm" title="Cambia tema"></button>
         <button id="logout-btn" class="icon-btn-sm" title="Esci"></button>
       </div>
     </aside>
@@ -73,6 +86,7 @@
             <button id="end-node-btn" class="btn"><span class="btn-icon" data-icon="flag"></span>Fine</button>
             <button id="link-mode-btn" class="btn"><span class="btn-icon" data-icon="link"></span>Collega nodi</button>
             <button id="delete-selection-btn" class="btn btn-danger-outline"><span class="btn-icon" data-icon="trash"></span>Elimina selezione</button>
+            <button id="export-ticket-btn" class="btn"><span class="btn-icon" data-icon="download"></span>Esporta</button>
             <span id="link-hint" class="hint" hidden>Clicca due nodi per collegarli (Esc per annullare)</span>
           </div>
         </header>
@@ -159,6 +173,8 @@
       </div>
     </form>
   </div>
+
+  <div id="toast" class="toast" hidden></div>
 
   <script src="icons.js"></script>
   <script src="app.js"></script>

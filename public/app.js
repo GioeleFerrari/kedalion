@@ -69,7 +69,25 @@ const el = {
   userAvatarFallback: document.getElementById('user-avatar-fallback'),
   userName: document.getElementById('user-name'),
   logoutBtn: document.getElementById('logout-btn'),
+  themeToggleBtn: document.getElementById('theme-toggle-btn'),
+
+  importBtn: document.getElementById('import-btn'),
+  importFileInput: document.getElementById('import-file-input'),
+  exportTicketBtn: document.getElementById('export-ticket-btn'),
+
+  toast: document.getElementById('toast'),
 };
+
+let toastTimer = null;
+function showToast(message, kind) {
+  clearTimeout(toastTimer);
+  el.toast.textContent = message;
+  el.toast.className = 'toast' + (kind ? ` ${kind}` : '');
+  el.toast.hidden = false;
+  toastTimer = setTimeout(() => {
+    el.toast.hidden = true;
+  }, 3200);
+}
 
 const NODE_HEIGHT = 48;
 const NODE_WIDTH = 170;
@@ -92,6 +110,7 @@ el.emptyIcon.innerHTML = svgIcon('ticket', 20);
 el.newTicketBtn.innerHTML = svgIcon('plus', 16);
 el.searchBtn.innerHTML = svgIcon('search', 16);
 el.newFolderBtn.innerHTML = svgIcon('folderPlus', 16);
+el.importBtn.innerHTML = svgIcon('upload', 16);
 el.nodeViewEdit.innerHTML = svgIcon('pencil', 13);
 el.loginBrandIcon.innerHTML = svgIcon('ticket', 26);
 el.githubLoginIcon.innerHTML = svgIconSolid('github', 18);
@@ -99,6 +118,33 @@ el.logoutBtn.innerHTML = svgIcon('x', 13);
 el.logoutBtn.title = 'Esci';
 document.querySelectorAll('.btn-icon[data-icon]').forEach((elm) => {
   elm.innerHTML = svgIcon(elm.dataset.icon, 14);
+});
+
+// --- Theme (light/dark) ---
+
+const THEME_STORAGE_KEY = 'kedalion-theme';
+
+function getCurrentTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+}
+
+function applyTheme(theme) {
+  if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else document.documentElement.removeAttribute('data-theme');
+  el.themeToggleBtn.innerHTML = svgIcon(theme === 'dark' ? 'sun' : 'moon', 13);
+  el.themeToggleBtn.title = theme === 'dark' ? 'Passa al tema chiaro' : 'Passa al tema scuro';
+}
+
+applyTheme(getCurrentTheme());
+
+el.themeToggleBtn.addEventListener('click', () => {
+  const next = getCurrentTheme() === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, next);
+  } catch (e) {
+    // Storage may be unavailable (private browsing, quota); the theme still applies for this session.
+  }
 });
 
 async function api(path, opts) {
@@ -374,6 +420,9 @@ async function selectTicket(id) {
   state.mode = 'idle';
   state.linkFirst = null;
   state.selected = null;
+  state.multiSelected.clear();
+  closeAllPopovers();
+  hideContextMenu();
   updateLinkModeUI();
   renderTicketTree();
 
@@ -388,6 +437,8 @@ async function selectTicket(id) {
 }
 
 function showEmptyState() {
+  state.selected = null;
+  state.multiSelected.clear();
   el.emptyState.hidden = false;
   el.ticketView.hidden = true;
   renderTicketTree();
@@ -450,6 +501,83 @@ el.folderForm.addEventListener('submit', async (e) => {
   closeFormPopover(el.folderFormPopover, el.folderForm);
   await api('/api/folders', { method: 'POST', body: JSON.stringify({ name }) });
   await loadAll();
+});
+
+// --- Ticket import / export ---
+
+function slugifyFilename(title) {
+  const slug = title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return (slug || 'ticket') + '.json';
+}
+
+el.exportTicketBtn.addEventListener('click', () => {
+  const ticket = state.tickets.find((t) => t.id === state.currentTicketId);
+  if (!ticket) return;
+  const payload = {
+    kedalionExport: 1,
+    ticket: {
+      title: ticket.title,
+      description: ticket.description || '',
+      status: ticket.status || 'open',
+    },
+    graph: {
+      nodes: state.graph.nodes,
+      edges: state.graph.edges,
+    },
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = slugifyFilename(ticket.title);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('Ticket esportato.', 'success');
+});
+
+el.importBtn.addEventListener('click', () => {
+  el.importFileInput.value = '';
+  el.importFileInput.click();
+});
+
+el.importFileInput.addEventListener('change', async () => {
+  const file = el.importFileInput.files && el.importFileInput.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const importedTicket = data.ticket || data; // tolerate a bare {title, description, ...} file too
+    const title = (importedTicket.title || '').trim();
+    if (!title) throw new Error('missing title');
+    const description = importedTicket.description || '';
+
+    const created = await api('/api/tickets', {
+      method: 'POST',
+      body: JSON.stringify({ title, description }),
+    });
+
+    const importedGraph = data.graph || {};
+    const nodes = Array.isArray(importedGraph.nodes) ? importedGraph.nodes : [];
+    const edges = Array.isArray(importedGraph.edges) ? importedGraph.edges : [];
+    if (nodes.length > 0 || edges.length > 0) {
+      await api(`/api/tickets/${created.id}/graph`, {
+        method: 'PUT',
+        body: JSON.stringify({ nodes, edges }),
+      });
+    }
+
+    await loadAll();
+    selectTicket(created.id);
+    showToast('Ticket importato correttamente.', 'success');
+  } catch (err) {
+    showToast('Import non riuscito: il file selezionato non sembra un export valido di Kedalion.', 'error');
+  }
 });
 
 // --- Generic popover helpers (used by ticket/folder forms) ---
@@ -653,6 +781,7 @@ el.nodeFormCancel.addEventListener('click', () => closeNodeForm());
 function removeNode(nodeId) {
   state.graph.nodes = state.graph.nodes.filter((n) => n.id !== nodeId);
   state.graph.edges = state.graph.edges.filter((e) => e.from !== nodeId && e.to !== nodeId);
+  state.multiSelected.delete(nodeId);
 }
 
 function removeEdge(edgeId) {
@@ -842,6 +971,7 @@ function onNodeContextMenu(node, e) {
   e.preventDefault();
   e.stopPropagation();
   state.selected = { type: 'node', id: node.id };
+  state.multiSelected.clear();
   renderGraph();
   showContextMenu(e.clientX, e.clientY, [
     { label: 'Aggiungi nodo collegato', icon: 'plus', action: () => addConnectedNode(node, e.clientX, e.clientY) },
@@ -875,6 +1005,7 @@ function onEdgeContextMenu(edge, e) {
   e.preventDefault();
   e.stopPropagation();
   state.selected = { type: 'edge', id: edge.id };
+  state.multiSelected.clear();
   renderGraph();
   showContextMenu(e.clientX, e.clientY, [
     {
@@ -934,6 +1065,7 @@ function onNodeClick(node) {
 function onEdgeClick(edge) {
   if (state.mode === 'link') return;
   state.selected = { type: 'edge', id: edge.id };
+  state.multiSelected.clear();
   renderGraph();
 }
 
