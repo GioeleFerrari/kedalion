@@ -24,7 +24,6 @@ const el = {
   emptyIcon: document.getElementById('empty-icon'),
   ticketView: document.getElementById('ticket-view'),
   ticketTitle: document.getElementById('ticket-title'),
-  ticketStatusToggle: document.getElementById('ticket-status-toggle'),
   ticketDesc: document.getElementById('ticket-desc'),
   svg: document.getElementById('graph-svg'),
   addNodeBtn: document.getElementById('add-node-btn'),
@@ -555,27 +554,6 @@ function renderTicketItem(t) {
   return item;
 }
 
-function renderStatusToggle(status) {
-  const done = status === 'done';
-  el.ticketStatusToggle.className = 'status-toggle ' + (done ? 'status-done' : 'status-open');
-  el.ticketStatusToggle.textContent = done ? 'Completato' : 'Aperto';
-  el.ticketStatusToggle.title = done ? 'Segna come da fare' : 'Segna come completato';
-}
-
-el.ticketStatusToggle.addEventListener('click', async () => {
-  const ticket = state.tickets.find((t) => t.id === state.currentTicketId);
-  if (!ticket) return;
-  const nextStatus = ticket.status === 'done' ? 'open' : 'done';
-  renderStatusToggle(nextStatus); // optimistic
-  const updated = await api(`/api/tickets/${state.currentTicketId}`, {
-    method: 'PUT',
-    body: JSON.stringify({ status: nextStatus }),
-  });
-  ticket.status = updated.status;
-  renderTicketTree();
-  showToast(nextStatus === 'done' ? 'Ticket segnato come completato.' : 'Ticket riaperto.', 'success');
-});
-
 async function selectTicket(id) {
   state.currentTicketId = id;
   state.mode = 'idle';
@@ -598,7 +576,6 @@ async function selectTicket(id) {
 
   const ticket = state.tickets.find((t) => t.id === id) || (await api(`/api/tickets/${id}`));
   el.ticketTitle.textContent = ticket.title;
-  renderStatusToggle(ticket.status);
   el.ticketDesc.innerHTML = renderMarkdown(ticket.description);
   el.emptyState.hidden = true;
   el.ticketView.hidden = false;

@@ -532,43 +532,6 @@ body {
   font-weight: 700;
   letter-spacing: -0.01em;
 }
-.status-toggle {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 10px 3px 8px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.12s, border-color 0.12s;
-}
-.status-toggle::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-.status-toggle.status-open {
-  color: var(--brand-dark);
-  background: var(--brand-light);
-  border-color: var(--brand-mid);
-}
-.status-toggle.status-open:hover {
-  border-color: var(--brand);
-}
-.status-toggle.status-done {
-  color: var(--success);
-  background: var(--success-bg);
-  border-color: var(--node-success-border);
-}
-.status-toggle.status-done:hover {
-  border-color: var(--success);
-}
 .ticket-desc {
   color: var(--ink-soft);
   margin: 0 0 12px;
