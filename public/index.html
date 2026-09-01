@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8" />
+<title>Ticket Guide</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-mark" id="brand-icon"></span>
+        <div>
+          <h1>Ticket Guide</h1>
+          <p class="sidebar-subtitle">I tuoi ticket</p>
+        </div>
+      </div>
+
+      <div class="sidebar-toolbar">
+        <button id="new-ticket-btn" class="icon-btn" title="Nuovo ticket" aria-label="Nuovo ticket"></button>
+        <button id="search-btn" class="icon-btn" title="Cerca ticket" aria-label="Cerca ticket"></button>
+        <button id="new-folder-btn" class="icon-btn" title="Nuova cartella" aria-label="Nuova cartella"></button>
+      </div>
+
+      <div id="search-box" class="search-box" hidden>
+        <input id="search-input" type="text" placeholder="Cerca per titolo..." />
+      </div>
+
+      <div id="ticket-tree" class="ticket-tree"></div>
+    </aside>
+
+    <main class="content">
+      <div id="empty-state" class="empty-state">
+        <span id="empty-icon" class="empty-icon"></span>
+        <p>Seleziona un ticket per vedere i passaggi.</p>
+      </div>
+
+      <div id="ticket-view" class="ticket-view" hidden>
+        <header class="ticket-header">
+          <h2 id="ticket-title"></h2>
+          <div id="ticket-desc" class="ticket-desc markdown-body"></div>
+          <div class="toolbar">
+            <button id="add-node-btn" class="btn"><span class="btn-icon" data-icon="plus"></span>Nodo</button>
+            <button id="start-node-btn" class="btn"><span class="btn-icon" data-icon="play"></span>Inizio</button>
+            <button id="end-node-btn" class="btn"><span class="btn-icon" data-icon="flag"></span>Fine</button>
+            <button id="link-mode-btn" class="btn"><span class="btn-icon" data-icon="link"></span>Collega nodi</button>
+            <button id="delete-selection-btn" class="btn btn-danger-outline"><span class="btn-icon" data-icon="trash"></span>Elimina selezione</button>
+            <span id="link-hint" class="hint" hidden>Clicca due nodi per collegarli (Esc per annullare)</span>
+          </div>
+        </header>
+        <svg id="graph-svg"></svg>
+      </div>
+    </main>
+  </div>
+
+  <div id="context-menu" class="context-menu" hidden></div>
+
+  <div id="node-view-popover" class="popover node-view-popover" hidden>
+    <div class="node-view-header">
+      <h3 id="node-view-title"></h3>
+      <button type="button" id="node-view-edit" class="icon-btn-sm" title="Modifica"></button>
+    </div>
+    <div id="node-view-desc" class="node-view-desc markdown-body"></div>
+    <p id="node-view-empty" class="node-view-empty" hidden>Nessuna descrizione. Clicca la matita per aggiungerne una.</p>
+  </div>
+
+  <div id="node-form-popover" class="popover" hidden>
+    <form id="node-form">
+      <label>
+        Titolo
+        <input id="node-form-title" type="text" required maxlength="80" />
+        <span id="node-form-title-hint" class="field-hint" hidden>Il nome dei nodi Inizio/Fine non è modificabile.</span>
+      </label>
+      <div class="field-group">
+        <div class="field-group-header">
+          <span class="field-group-label">Descrizione</span>
+          <div class="md-tabs" data-target="node-form">
+            <button type="button" class="md-tab active" data-mode="write">Scrivi</button>
+            <button type="button" class="md-tab" data-mode="preview">Anteprima</button>
+          </div>
+        </div>
+        <textarea id="node-form-desc" title="Ctrl+B grassetto, Ctrl+E codice" rows="4" maxlength="1000" placeholder="Supporta Markdown: **grassetto**, *corsivo*, elenchi, `codice`, [link](url)..."></textarea>
+        <div id="node-form-desc-preview" class="markdown-body md-preview" hidden></div>
+      </div>
+      <div class="popover-actions">
+        <button type="button" id="node-form-cancel" class="btn-secondary">Annulla</button>
+        <button type="submit" class="btn-primary">Salva</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="ticket-form-popover" class="popover" hidden>
+    <form id="ticket-form">
+      <label>
+        Titolo ticket
+        <input id="ticket-form-title" type="text" required maxlength="100" />
+      </label>
+      <div class="field-group">
+        <div class="field-group-header">
+          <span class="field-group-label">Descrizione</span>
+          <div class="md-tabs" data-target="ticket-form">
+            <button type="button" class="md-tab active" data-mode="write">Scrivi</button>
+            <button type="button" class="md-tab" data-mode="preview">Anteprima</button>
+          </div>
+        </div>
+        <textarea id="ticket-form-desc" title="Ctrl+B grassetto, Ctrl+E codice" rows="3" maxlength="1000" placeholder="Supporta Markdown: **grassetto**, *corsivo*, elenchi, `codice`..."></textarea>
+        <div id="ticket-form-desc-preview" class="markdown-body md-preview" hidden></div>
+      </div>
+      <label>
+        Cartella
+        <select id="ticket-form-folder">
+          <option value="">Nessuna cartella</option>
+        </select>
+      </label>
+      <div class="popover-actions">
+        <button type="button" id="ticket-form-cancel" class="btn-secondary">Annulla</button>
+        <button type="submit" class="btn-primary">Crea ticket</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="folder-form-popover" class="popover" hidden>
+    <form id="folder-form">
+      <label>
+        Nome cartella
+        <input id="folder-form-name" type="text" required maxlength="60" />
+      </label>
+      <div class="popover-actions">
+        <button type="button" id="folder-form-cancel" class="btn-secondary">Annulla</button>
+        <button type="submit" class="btn-primary">Crea cartella</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
