@@ -1331,6 +1331,75 @@ function snapToGrid(value) {
   return Math.round(value / GRID_SIZE) * GRID_SIZE;
 }
 
+// Smart alignment guides: while dragging a node, snap its center to the x/y of
+// any other node's center once it gets within ALIGN_THRESHOLD graph units, and
+// report which coordinate matched so a guide line can be drawn for it.
+const ALIGN_THRESHOLD = 6;
+
+function computeAlignSnap(nodeId, x, y) {
+  let bestX = null;
+  let bestXDist = ALIGN_THRESHOLD;
+  let bestY = null;
+  let bestYDist = ALIGN_THRESHOLD;
+  for (const other of state.graph.nodes) {
+    if (other.id === nodeId) continue;
+    const dx = Math.abs(other.x - x);
+    if (dx < bestXDist) {
+      bestXDist = dx;
+      bestX = other.x;
+    }
+    const dy = Math.abs(other.y - y);
+    if (dy < bestYDist) {
+      bestYDist = dy;
+      bestY = other.y;
+    }
+  }
+  return {
+    x: bestX !== null ? bestX : x,
+    y: bestY !== null ? bestY : y,
+    guideX: bestX,
+    guideY: bestY,
+  };
+}
+
+function renderAlignGuides(guideX, guideY) {
+  const viewport = el.svg.querySelector('.graph-viewport');
+  if (!viewport) return;
+  let group = viewport.querySelector('#align-guides');
+  if (!group) {
+    group = document.createElementNS(SVG_NS, 'g');
+    group.setAttribute('id', 'align-guides');
+    viewport.appendChild(group);
+  } else {
+    viewport.appendChild(group); // keep on top after a renderGraph() rebuild
+  }
+  group.innerHTML = '';
+  const SPAN = 4000;
+  if (guideX !== null) {
+    const line = document.createElementNS(SVG_NS, 'line');
+    line.setAttribute('class', 'align-guide');
+    line.setAttribute('x1', guideX);
+    line.setAttribute('x2', guideX);
+    line.setAttribute('y1', -SPAN);
+    line.setAttribute('y2', SPAN);
+    group.appendChild(line);
+  }
+  if (guideY !== null) {
+    const line = document.createElementNS(SVG_NS, 'line');
+    line.setAttribute('class', 'align-guide');
+    line.setAttribute('x1', -SPAN);
+    line.setAttribute('x2', SPAN);
+    line.setAttribute('y1', guideY);
+    line.setAttribute('y2', guideY);
+    group.appendChild(line);
+  }
+}
+
+function clearAlignGuides() {
+  const stray = el.svg.querySelector('#align-guides');
+  if (stray) stray.remove();
+}
+
 function nodesOverlapRect(node, rx1, ry1, rx2, ry2) {
   const w = nodeWidth() / 2;
   const h = NODE_HEIGHT / 2;
@@ -1407,6 +1476,18 @@ el.svg.addEventListener('mousemove', (e) => {
         dy = snapToGrid(draggedStart.y + dy) - draggedStart.y;
       }
     }
+    let guideX = null;
+    let guideY = null;
+    if (!(e.ctrlKey || e.metaKey)) {
+      const draggedStart = groupDragState.starts.get(groupDragState.draggedNodeId);
+      if (draggedStart) {
+        const snap = computeAlignSnap(groupDragState.draggedNodeId, draggedStart.x + dx, draggedStart.y + dy);
+        dx = snap.x - draggedStart.x;
+        dy = snap.y - draggedStart.y;
+        guideX = snap.guideX;
+        guideY = snap.guideY;
+      }
+    }
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) groupDragState.moved = true;
     for (const [id, start] of groupDragState.starts) {
       const n = state.graph.nodes.find((gn) => gn.id === id);
@@ -1416,6 +1497,7 @@ el.svg.addEventListener('mousemove', (e) => {
       }
     }
     renderGraph();
+    renderAlignGuides(guideX, guideY);
     return;
   }
 
@@ -1425,14 +1507,23 @@ el.svg.addEventListener('mousemove', (e) => {
   const p = clientToGraph(e.clientX, e.clientY);
   let newX = p.x - dragState.offsetX;
   let newY = p.y - dragState.offsetY;
+  let guideX = null;
+  let guideY = null;
   if (e.ctrlKey || e.metaKey) {
     newX = snapToGrid(newX);
     newY = snapToGrid(newY);
+  } else {
+    const snap = computeAlignSnap(node.id, newX, newY);
+    newX = snap.x;
+    newY = snap.y;
+    guideX = snap.guideX;
+    guideY = snap.guideY;
   }
   if (Math.abs(newX - node.x) > 2 || Math.abs(newY - node.y) > 2) dragState.moved = true;
   node.x = newX;
   node.y = newY;
   renderGraph();
+  renderAlignGuides(guideX, guideY);
 });
 
 el.svg.addEventListener('mouseup', () => {
@@ -1453,6 +1544,7 @@ el.svg.addEventListener('mouseup', () => {
       saveGraph();
     }
     groupDragState = null;
+    clearAlignGuides();
     return;
   }
   if (dragState) {
@@ -1461,6 +1553,7 @@ el.svg.addEventListener('mouseup', () => {
       saveGraph();
     }
     dragState = null;
+    clearAlignGuides();
   }
 });
 
@@ -1474,10 +1567,12 @@ el.svg.addEventListener('mouseleave', () => {
   if (groupDragState) {
     if (groupDragState.moved) saveGraph();
     groupDragState = null;
+    clearAlignGuides();
   }
   if (dragState) {
     if (dragState.moved) saveGraph();
     dragState = null;
+    clearAlignGuides();
   }
 });
 

@@ -649,6 +649,13 @@ body {
   stroke-dasharray: 5 3;
 }
 
+.align-guide {
+  stroke: var(--brand);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
 .marquee-rect {
   fill: var(--brand-light);
   fill-opacity: 0.5;
