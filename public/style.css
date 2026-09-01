@@ -541,6 +541,20 @@ body {
   stroke: var(--brand);
   stroke-width: 2;
 }
+.node-rect.multi-selected {
+  stroke: var(--brand);
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+}
+
+.marquee-rect {
+  fill: var(--brand-light);
+  fill-opacity: 0.5;
+  stroke: var(--brand);
+  stroke-width: 1.25;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
 
 .node-badge circle {
   stroke: #fff;

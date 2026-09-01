@@ -106,7 +106,7 @@ app.put('/api/tickets/:id/graph', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Ticket guide in ascolto su http://localhost:${PORT}`);
+  console.log(`Kedalion in ascolto su http://localhost:${PORT}`);
   if (!auth.isConfigured()) {
     console.log(
       'Login con GitHub non configurato: imposta GITHUB_CLIENT_ID e GITHUB_CLIENT_SECRET (vedi README) per abilitarlo.'

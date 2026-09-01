@@ -6,7 +6,7 @@ const Database = require('better-sqlite3');
 const DATA_DIR = path.join(__dirname, '..', 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const db = new Database(path.join(DATA_DIR, 'ticket-guide.sqlite3'));
+const db = new Database(path.join(DATA_DIR, 'kedalion.sqlite3'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 

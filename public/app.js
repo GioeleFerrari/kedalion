@@ -6,6 +6,7 @@ const state = {
   mode: 'idle', // 'idle' | 'link'
   linkFirst: null,
   selected: null, // { type: 'node'|'edge', id }
+  multiSelected: new Set(), // node ids selected via marquee / shift-click, moved together
   searchQuery: '',
   collapsedFolders: new Set(),
 };
@@ -734,6 +735,13 @@ el.startNodeBtn.addEventListener('click', () => addSpecialNode('start'));
 el.endNodeBtn.addEventListener('click', () => addSpecialNode('end'));
 
 el.deleteSelectionBtn.addEventListener('click', () => {
+  if (state.multiSelected.size > 0) {
+    for (const id of state.multiSelected) removeNode(id);
+    state.multiSelected.clear();
+    renderGraph();
+    saveGraph();
+    return;
+  }
   if (!state.selected) return;
   if (state.selected.type === 'node') removeNode(state.selected.id);
   else removeEdge(state.selected.id);
@@ -746,20 +754,30 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     state.mode = 'idle';
     state.linkFirst = null;
+    state.multiSelected.clear();
     updateLinkModeUI();
     renderGraph();
     closeAllPopovers();
     hideContextMenu();
   } else if (e.key === 'Delete' || e.key === 'Backspace') {
-    if (state.selected && document.activeElement === document.body) {
+    if ((state.selected || state.multiSelected.size > 0) && document.activeElement === document.body) {
       el.deleteSelectionBtn.click();
     }
   }
 });
 
+let marqueeState = null;
+let suppressNextCanvasClick = false;
+
 el.svg.addEventListener('mousedown', (e) => {
   // Avoid the native text-selection cursor/highlight that a double-click on the canvas can trigger.
   if (e.detail > 1) e.preventDefault();
+
+  if (e.button !== 0 || state.mode === 'link' || e.target !== el.svg) return;
+  const rect = el.svg.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  marqueeState = { startX: x, startY: y, curX: x, curY: y, moved: false };
 });
 
 el.svg.addEventListener('dblclick', (e) => {
@@ -771,8 +789,13 @@ el.svg.addEventListener('dblclick', (e) => {
 });
 
 el.svg.addEventListener('click', (e) => {
+  if (suppressNextCanvasClick) {
+    suppressNextCanvasClick = false;
+    return;
+  }
   if (e.target === el.svg) {
     state.selected = null;
+    state.multiSelected.clear();
     renderGraph();
   }
 });
@@ -915,11 +938,28 @@ function onEdgeClick(edge) {
 }
 
 let dragState = null;
+let groupDragState = null;
 let suppressNextClick = false;
 
 function onNodeMouseDown(node, e) {
   if (state.mode === 'link') return;
   if (e.detail > 1) e.preventDefault();
+  e.stopPropagation(); // don't let this bubble into the marquee-selection mousedown handler
+
+  if (state.multiSelected.size > 1 && state.multiSelected.has(node.id)) {
+    const starts = new Map();
+    for (const id of state.multiSelected) {
+      const n = state.graph.nodes.find((gn) => gn.id === id);
+      if (n) starts.set(id, { x: n.x, y: n.y });
+    }
+    groupDragState = { startClientX: e.clientX, startClientY: e.clientY, starts, moved: false };
+    return;
+  }
+
+  if (state.multiSelected.size > 0) {
+    state.multiSelected.clear();
+    renderGraph();
+  }
   const rect = el.svg.getBoundingClientRect();
   dragState = {
     nodeId: node.id,
@@ -935,7 +975,78 @@ function snapToGrid(value) {
   return Math.round(value / GRID_SIZE) * GRID_SIZE;
 }
 
+function nodesOverlapRect(node, rx1, ry1, rx2, ry2) {
+  const w = nodeWidth() / 2;
+  const h = NODE_HEIGHT / 2;
+  return node.x - w < rx2 && node.x + w > rx1 && node.y - h < ry2 && node.y + h > ry1;
+}
+
+function updateMarqueeRect() {
+  if (!marqueeState) return;
+  let rectEl = el.svg.querySelector('#marquee-rect');
+  if (!rectEl) {
+    rectEl = document.createElementNS(SVG_NS, 'rect');
+    rectEl.setAttribute('id', 'marquee-rect');
+    rectEl.setAttribute('class', 'marquee-rect');
+    el.svg.appendChild(rectEl);
+  } else {
+    el.svg.appendChild(rectEl); // keep it on top after a renderGraph() rebuild
+  }
+  const x = Math.min(marqueeState.startX, marqueeState.curX);
+  const y = Math.min(marqueeState.startY, marqueeState.curY);
+  const w = Math.abs(marqueeState.curX - marqueeState.startX);
+  const h = Math.abs(marqueeState.curY - marqueeState.startY);
+  rectEl.setAttribute('x', x);
+  rectEl.setAttribute('y', y);
+  rectEl.setAttribute('width', w);
+  rectEl.setAttribute('height', h);
+}
+
 el.svg.addEventListener('mousemove', (e) => {
+  if (marqueeState) {
+    const rect = el.svg.getBoundingClientRect();
+    marqueeState.curX = e.clientX - rect.left;
+    marqueeState.curY = e.clientY - rect.top;
+    if (
+      Math.abs(marqueeState.curX - marqueeState.startX) > 3 ||
+      Math.abs(marqueeState.curY - marqueeState.startY) > 3
+    ) {
+      marqueeState.moved = true;
+    }
+    if (marqueeState.moved) {
+      const rx1 = Math.min(marqueeState.startX, marqueeState.curX);
+      const rx2 = Math.max(marqueeState.startX, marqueeState.curX);
+      const ry1 = Math.min(marqueeState.startY, marqueeState.curY);
+      const ry2 = Math.max(marqueeState.startY, marqueeState.curY);
+      state.multiSelected = new Set(
+        state.graph.nodes.filter((n) => nodesOverlapRect(n, rx1, ry1, rx2, ry2)).map((n) => n.id)
+      );
+      state.selected = null;
+      renderGraph();
+      updateMarqueeRect();
+    }
+    return;
+  }
+
+  if (groupDragState) {
+    let dx = e.clientX - groupDragState.startClientX;
+    let dy = e.clientY - groupDragState.startClientY;
+    if (e.ctrlKey || e.metaKey) {
+      dx = snapToGrid(dx);
+      dy = snapToGrid(dy);
+    }
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) groupDragState.moved = true;
+    for (const [id, start] of groupDragState.starts) {
+      const n = state.graph.nodes.find((gn) => gn.id === id);
+      if (n) {
+        n.x = start.x + dx;
+        n.y = start.y + dy;
+      }
+    }
+    renderGraph();
+    return;
+  }
+
   if (!dragState) return;
   const rect = el.svg.getBoundingClientRect();
   const node = state.graph.nodes.find((n) => n.id === dragState.nodeId);
@@ -953,6 +1064,21 @@ el.svg.addEventListener('mousemove', (e) => {
 });
 
 el.svg.addEventListener('mouseup', () => {
+  if (marqueeState) {
+    if (marqueeState.moved) suppressNextCanvasClick = true;
+    marqueeState = null;
+    const stray = el.svg.querySelector('#marquee-rect');
+    if (stray) stray.remove();
+    return;
+  }
+  if (groupDragState) {
+    if (groupDragState.moved) {
+      suppressNextClick = true;
+      saveGraph();
+    }
+    groupDragState = null;
+    return;
+  }
   if (dragState) {
     if (dragState.moved) {
       suppressNextClick = true;
@@ -963,6 +1089,15 @@ el.svg.addEventListener('mouseup', () => {
 });
 
 el.svg.addEventListener('mouseleave', () => {
+  if (marqueeState) {
+    marqueeState = null;
+    const stray = el.svg.querySelector('#marquee-rect');
+    if (stray) stray.remove();
+  }
+  if (groupDragState) {
+    if (groupDragState.moved) saveGraph();
+    groupDragState = null;
+  }
   if (dragState) {
     if (dragState.moved) saveGraph();
     dragState = null;
@@ -1039,6 +1174,7 @@ function renderGraph() {
     if (node.nodeType) cls += ` ${node.nodeType}`;
     if (node.done) cls += ' done';
     if (isSelected('node', node.id) || state.linkFirst === node.id) cls += ' selected';
+    if (state.multiSelected.has(node.id)) cls += ' multi-selected';
     rect.setAttribute('class', cls);
     rect.addEventListener('mousedown', (e) => onNodeMouseDown(node, e));
     rect.addEventListener('click', (e) => {

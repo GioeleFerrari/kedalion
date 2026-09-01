@@ -63,7 +63,7 @@ router.get('/github/callback', async (req, res) => {
     const userRes = await fetch('https://api.github.com/user', {
       headers: {
         Authorization: `Bearer ${tokenData.access_token}`,
-        'User-Agent': 'ticket-guide-app',
+        'User-Agent': 'kedalion-app',
         Accept: 'application/vnd.github+json',
       },
     });

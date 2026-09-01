@@ -1,4 +1,4 @@
-# Ticket Guide
+# Kedalion
 
 App web locale per gestire ticket e organizzare i passaggi di risoluzione come grafo di nodi collegabili.
 
@@ -49,6 +49,10 @@ Senza queste variabili l'app funziona comunque tramite l'opzione "Continua senza
 
 ## Dati
 
-Ticket, cartelle e grafi sono salvati in un database SQLite locale (`data/ticket-guide.sqlite3`, creato automaticamente al primo avvio). La cartella `data/` non è versionata su git.
+Ticket, cartelle e grafi sono salvati in un database SQLite locale (`data/kedalion.sqlite3`, creato automaticamente al primo avvio). La cartella `data/` non è versionata su git.
 
 Se il progetto conteneva dati dalla vecchia versione basata su file JSON (`data/tickets/`, `data/folders/`, `data/graphs/`), vengono migrati automaticamente nel database al primo avvio, sotto un account "Ticket locali".
+
+## Licenza
+
+[MIT](LICENSE)
