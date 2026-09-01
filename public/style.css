@@ -5,6 +5,14 @@
    which otherwise silently overrides the browser's default [hidden] rule). */
 [hidden] { display: none !important; }
 
+/* Consistent keyboard-focus ring across every interactive element, instead of each
+   browser's own default outline (or none at all on custom buttons/divs). */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
 :root {
   --brand: #7b42bc;
   --brand-dark: #4a2b7a;
@@ -270,7 +278,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 48px 7px 8px;
+  padding: 7px 26px 7px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--ink-soft);
@@ -482,11 +490,54 @@ body {
 .ticket-header {
   margin-bottom: 14px;
 }
+.ticket-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
 .ticket-header h2 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.01em;
+}
+.status-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, border-color 0.12s;
+}
+.status-toggle::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.status-toggle.status-open {
+  color: var(--brand-dark);
+  background: var(--brand-light);
+  border-color: var(--brand-mid);
+}
+.status-toggle.status-open:hover {
+  border-color: var(--brand);
+}
+.status-toggle.status-done {
+  color: var(--success);
+  background: var(--success-bg);
+  border-color: var(--node-success-border);
+}
+.status-toggle.status-done:hover {
+  border-color: var(--success);
 }
 .ticket-desc {
   color: var(--ink-soft);

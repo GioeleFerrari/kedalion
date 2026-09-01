@@ -24,6 +24,7 @@ const el = {
   emptyIcon: document.getElementById('empty-icon'),
   ticketView: document.getElementById('ticket-view'),
   ticketTitle: document.getElementById('ticket-title'),
+  ticketStatusToggle: document.getElementById('ticket-status-toggle'),
   ticketDesc: document.getElementById('ticket-desc'),
   svg: document.getElementById('graph-svg'),
   addNodeBtn: document.getElementById('add-node-btn'),
@@ -407,10 +408,10 @@ function renderFolderGroup(folder, tickets) {
   const header = document.createElement('div');
   header.className = 'folder-header' + (collapsed ? ' collapsed' : '');
   header.innerHTML = `
+    <span class="chevron">${svgIcon('chevronDown', 14)}</span>
     <span class="folder-icon">${svgIcon('folder', 14)}</span>
     <span class="folder-name"></span>
     <span class="folder-count"></span>
-    <span class="chevron">${svgIcon('chevronDown', 14)}</span>
     ${folder ? `<button class="folder-delete" title="Elimina cartella">${svgIcon('trash', 13)}</button>` : ''}
   `;
   header.querySelector('.folder-name').textContent = folder ? folder.name : 'Senza cartella';
@@ -519,6 +520,27 @@ function renderTicketItem(t) {
   return item;
 }
 
+function renderStatusToggle(status) {
+  const done = status === 'done';
+  el.ticketStatusToggle.className = 'status-toggle ' + (done ? 'status-done' : 'status-open');
+  el.ticketStatusToggle.textContent = done ? 'Completato' : 'Aperto';
+  el.ticketStatusToggle.title = done ? 'Segna come da fare' : 'Segna come completato';
+}
+
+el.ticketStatusToggle.addEventListener('click', async () => {
+  const ticket = state.tickets.find((t) => t.id === state.currentTicketId);
+  if (!ticket) return;
+  const nextStatus = ticket.status === 'done' ? 'open' : 'done';
+  renderStatusToggle(nextStatus); // optimistic
+  const updated = await api(`/api/tickets/${state.currentTicketId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ status: nextStatus }),
+  });
+  ticket.status = updated.status;
+  renderTicketTree();
+  showToast(nextStatus === 'done' ? 'Ticket segnato come completato.' : 'Ticket riaperto.', 'success');
+});
+
 async function selectTicket(id) {
   state.currentTicketId = id;
   state.mode = 'idle';
@@ -541,6 +563,7 @@ async function selectTicket(id) {
 
   const ticket = state.tickets.find((t) => t.id === id) || (await api(`/api/tickets/${id}`));
   el.ticketTitle.textContent = ticket.title;
+  renderStatusToggle(ticket.status);
   el.ticketDesc.innerHTML = renderMarkdown(ticket.description);
   el.emptyState.hidden = true;
   el.ticketView.hidden = false;
@@ -594,12 +617,16 @@ el.ticketForm.addEventListener('submit', async (e) => {
   const description = el.ticketFormDesc.value.trim();
   const folderId = el.ticketFormFolder.value || undefined;
   closeFormPopover(el.ticketFormPopover, el.ticketForm);
-  const ticket = await api('/api/tickets', {
-    method: 'POST',
-    body: JSON.stringify({ title, description, folderId }),
-  });
-  await loadAll();
-  selectTicket(ticket.id);
+  try {
+    const ticket = await api('/api/tickets', {
+      method: 'POST',
+      body: JSON.stringify({ title, description, folderId }),
+    });
+    await loadAll();
+    selectTicket(ticket.id);
+  } catch (err) {
+    showToast('Creazione del ticket non riuscita: riprova.', 'error');
+  }
 });
 
 el.newFolderBtn.addEventListener('click', () => {
@@ -615,8 +642,12 @@ el.folderForm.addEventListener('submit', async (e) => {
   const name = el.folderFormName.value.trim();
   if (!name) return;
   closeFormPopover(el.folderFormPopover, el.folderForm);
-  await api('/api/folders', { method: 'POST', body: JSON.stringify({ name }) });
-  await loadAll();
+  try {
+    await api('/api/folders', { method: 'POST', body: JSON.stringify({ name }) });
+    await loadAll();
+  } catch (err) {
+    showToast('Creazione della cartella non riuscita: riprova.', 'error');
+  }
 });
 
 // --- Ticket import / export ---
@@ -918,10 +949,14 @@ function updateLinkModeUI() {
 }
 
 async function saveGraph() {
-  await api(`/api/tickets/${state.currentTicketId}/graph`, {
-    method: 'PUT',
-    body: JSON.stringify(state.graph),
-  });
+  try {
+    await api(`/api/tickets/${state.currentTicketId}/graph`, {
+      method: 'PUT',
+      body: JSON.stringify(state.graph),
+    });
+  } catch (err) {
+    showToast('Salvataggio non riuscito: controlla la connessione e riprova.', 'error');
+  }
 }
 
 el.addNodeBtn.addEventListener('click', () => {
@@ -987,8 +1022,17 @@ function addSpecialNode(nodeType) {
 el.startNodeBtn.addEventListener('click', () => addSpecialNode('start'));
 el.endNodeBtn.addEventListener('click', () => addSpecialNode('end'));
 
-el.deleteSelectionBtn.addEventListener('click', () => {
+el.deleteSelectionBtn.addEventListener('click', async () => {
   if (state.multiSelected.size > 0) {
+    const count = state.multiSelected.size;
+    if (count > 1) {
+      const ok = await askConfirm({
+        title: 'Eliminare i nodi selezionati?',
+        message: `${count} nodi e i loro collegamenti verranno eliminati.`,
+        confirmLabel: 'Elimina',
+      });
+      if (!ok) return;
+    }
     for (const id of state.multiSelected) removeNode(id);
     state.multiSelected.clear();
     renderGraph();

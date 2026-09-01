@@ -78,7 +78,10 @@
 
       <div id="ticket-view" class="ticket-view" hidden>
         <header class="ticket-header">
-          <h2 id="ticket-title"></h2>
+          <div class="ticket-title-row">
+            <h2 id="ticket-title"></h2>
+            <button type="button" id="ticket-status-toggle" class="status-toggle"></button>
+          </div>
           <div id="ticket-desc" class="ticket-desc markdown-body"></div>
           <div class="toolbar">
             <button id="add-node-btn" class="btn" title="Aggiungi un nuovo passaggio al grafo"><span class="btn-icon" data-icon="plus"></span>Nodo</button>
