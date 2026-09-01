@@ -38,6 +38,13 @@ router.get('/github', (req, res) => {
 router.get('/github/callback', async (req, res) => {
   const { code, state } = req.query;
   if (!code || !state || state !== req.session.oauthState) {
+    console.error('GitHub OAuth state mismatch:', {
+      sessionId: req.sessionID,
+      hasCode: Boolean(code),
+      receivedState: state,
+      expectedState: req.session.oauthState,
+      cookieHeader: req.headers.cookie,
+    });
     return res.status(400).send('Login fallito: richiesta non valida o scaduta. Riprova.');
   }
   delete req.session.oauthState;

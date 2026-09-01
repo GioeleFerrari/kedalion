@@ -1,5 +1,10 @@
 * { box-sizing: border-box; }
 
+/* The `hidden` attribute must always win over any `display` set elsewhere
+   (several containers below set display:flex directly on their base class,
+   which otherwise silently overrides the browser's default [hidden] rule). */
+[hidden] { display: none !important; }
+
 :root {
   --brand: #7b42bc;
   --brand-dark: #4a2b7a;
