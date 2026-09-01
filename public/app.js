@@ -35,9 +35,6 @@ const el = {
   deleteSelectionBtn: document.getElementById('delete-selection-btn'),
   linkHint: document.getElementById('link-hint'),
   contextMenu: document.getElementById('context-menu'),
-  graphFab: document.getElementById('graph-fab'),
-  graphMinimap: document.getElementById('graph-minimap'),
-  minimapSvg: document.getElementById('minimap-svg'),
 
   nodeFormPopover: document.getElementById('node-form-popover'),
   nodeFormHeaderIcon: document.getElementById('node-form-header-icon'),
@@ -190,81 +187,7 @@ function centerGraphView() {
 function applyPanTransform() {
   const viewport = el.svg.querySelector('.graph-viewport');
   if (viewport) viewport.setAttribute('transform', `translate(${state.pan.x}, ${state.pan.y})`);
-  updateMinimapViewportRect();
 }
-
-// --- Floating minimap ---
-
-const MINIMAP_W = 170;
-const MINIMAP_H = 120;
-const MINIMAP_PAD = 10;
-
-function minimapBounds() {
-  const nodes = state.graph.nodes;
-  if (nodes.length === 0) return null;
-  const minX = Math.min(...nodes.map((n) => n.x - nodeWidth() / 2));
-  const maxX = Math.max(...nodes.map((n) => n.x + nodeWidth() / 2));
-  const minY = Math.min(...nodes.map((n) => n.y - NODE_HEIGHT / 2));
-  const maxY = Math.max(...nodes.map((n) => n.y + NODE_HEIGHT / 2));
-  const w = Math.max(maxX - minX, 1);
-  const h = Math.max(maxY - minY, 1);
-  const scale = Math.min((MINIMAP_W - MINIMAP_PAD * 2) / w, (MINIMAP_H - MINIMAP_PAD * 2) / h, 0.5);
-  return { minX, minY, scale };
-}
-
-function renderMinimap() {
-  if (state.graph.nodes.length === 0) {
-    el.graphMinimap.hidden = true;
-    return;
-  }
-  el.graphMinimap.hidden = false;
-  const bounds = minimapBounds();
-  el.minimapSvg.innerHTML = '';
-  el.minimapSvg.setAttribute('viewBox', `0 0 ${MINIMAP_W} ${MINIMAP_H}`);
-
-  for (const node of state.graph.nodes) {
-    const rect = document.createElementNS(SVG_NS, 'rect');
-    rect.setAttribute('x', MINIMAP_PAD + (node.x - nodeWidth() / 2 - bounds.minX) * bounds.scale);
-    rect.setAttribute('y', MINIMAP_PAD + (node.y - NODE_HEIGHT / 2 - bounds.minY) * bounds.scale);
-    rect.setAttribute('width', Math.max(nodeWidth() * bounds.scale, 3));
-    rect.setAttribute('height', Math.max(NODE_HEIGHT * bounds.scale, 3));
-    rect.setAttribute('rx', 1.5);
-    rect.setAttribute('class', 'minimap-node' + (node.nodeType ? ` ${node.nodeType}` : ''));
-    el.minimapSvg.appendChild(rect);
-  }
-
-  const viewportRect = document.createElementNS(SVG_NS, 'rect');
-  viewportRect.setAttribute('id', 'minimap-viewport-rect');
-  viewportRect.setAttribute('class', 'minimap-viewport');
-  el.minimapSvg.appendChild(viewportRect);
-  updateMinimapViewportRect();
-}
-
-function updateMinimapViewportRect() {
-  const viewportRect = el.minimapSvg.querySelector('#minimap-viewport-rect');
-  if (!viewportRect) return;
-  const bounds = minimapBounds();
-  if (!bounds) return;
-  const svgRect = el.svg.getBoundingClientRect();
-  viewportRect.setAttribute('x', MINIMAP_PAD + (-state.pan.x - bounds.minX) * bounds.scale);
-  viewportRect.setAttribute('y', MINIMAP_PAD + (-state.pan.y - bounds.minY) * bounds.scale);
-  viewportRect.setAttribute('width', svgRect.width * bounds.scale);
-  viewportRect.setAttribute('height', svgRect.height * bounds.scale);
-}
-
-el.graphMinimap.addEventListener('click', (e) => {
-  const bounds = minimapBounds();
-  if (!bounds) return;
-  const rect = el.minimapSvg.getBoundingClientRect();
-  const mx = ((e.clientX - rect.left) / rect.width) * MINIMAP_W;
-  const my = ((e.clientY - rect.top) / rect.height) * MINIMAP_H;
-  const graphX = (mx - MINIMAP_PAD) / bounds.scale + bounds.minX;
-  const graphY = (my - MINIMAP_PAD) / bounds.scale + bounds.minY;
-  const svgRect = el.svg.getBoundingClientRect();
-  state.pan.x = svgRect.width / 2 - graphX;
-  state.pan.y = svgRect.height / 2 - graphY;
-  renderGraph();
-});
 
 function truncateLabel(label) {
   if (label.length <= NODE_LABEL_MAX_CHARS) return label;
@@ -279,7 +202,6 @@ el.searchBtn.innerHTML = svgIcon('search', 16);
 el.newFolderBtn.innerHTML = svgIcon('folderPlus', 16);
 el.importBtn.innerHTML = svgIcon('upload', 16);
 el.nodeViewEdit.innerHTML = svgIcon('pencil', 13);
-el.graphFab.innerHTML = svgIcon('plus', 20);
 el.nodeViewClose.innerHTML = svgIcon('x', 13);
 el.nodeViewHeaderIcon.innerHTML = svgIcon('info', 14);
 el.nodeFormHeaderIcon.innerHTML = svgIcon('pencil', 14);
@@ -1072,16 +994,13 @@ async function saveGraph() {
   }
 }
 
-function quickAddNode(anchorEl) {
+el.addNodeBtn.addEventListener('click', () => {
   const center = viewCenterGraphPoint();
   const x = center.x + (Math.random() * 60 - 30);
   const y = center.y + (Math.random() * 60 - 30);
-  const btnRect = anchorEl.getBoundingClientRect();
+  const btnRect = el.addNodeBtn.getBoundingClientRect();
   addNodeAt(x, y, btnRect.left, btnRect.bottom + 6);
-}
-
-el.addNodeBtn.addEventListener('click', () => quickAddNode(el.addNodeBtn));
-el.graphFab.addEventListener('click', () => quickAddNode(el.graphFab));
+});
 
 el.linkModeBtn.addEventListener('click', () => {
   state.mode = state.mode === 'link' ? 'idle' : 'link';
@@ -1601,7 +1520,6 @@ function svgIconGroup(name, cx, cy, size, className) {
 }
 
 function renderGraph() {
-  renderMinimap();
   el.svg.innerHTML = '';
 
   let defs = document.createElementNS(SVG_NS, 'defs');
