@@ -79,6 +79,14 @@ body {
 .layout {
   display: flex;
   height: 100vh;
+  background: var(--bg);
+  padding: 12px;
+  gap: 0;
+  box-sizing: border-box;
+  transition: gap 0.18s ease;
+}
+.layout:has(.sidebar:not(.collapsed)) {
+  gap: 14px;
 }
 
 /* --- Login screen --- */
@@ -176,15 +184,18 @@ body {
   width: 296px;
   flex-shrink: 0;
   background: var(--surface);
-  border-right: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: width 0.18s ease, border-color 0.18s ease;
+  transition: width 0.18s ease, border-color 0.18s ease, margin 0.18s ease;
 }
 .sidebar.collapsed {
   width: 0;
-  border-right-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 .sidebar-expand-btn {
   position: fixed;
@@ -613,6 +624,13 @@ body {
   color: var(--ink-faint);
 }
 
+.graph-area {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
 #graph-svg {
   flex: 1;
   width: 100%;
@@ -625,6 +643,107 @@ body {
   cursor: default;
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* --- Floating toolbar over the canvas --- */
+
+.floating-toolbar {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+  max-width: calc(100% - 28px);
+}
+.floating-toolbar .btn {
+  border-radius: 999px;
+  border-color: transparent;
+}
+.floating-toolbar .btn:hover {
+  border-color: var(--brand);
+}
+.floating-toolbar .btn-danger-outline {
+  border-color: transparent;
+}
+.floating-hint {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  padding: 5px 12px;
+  white-space: nowrap;
+}
+
+/* --- Floating action button (quick add node) --- */
+
+.graph-fab {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 10;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: none;
+  background: var(--brand);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, transform 0.1s;
+}
+.graph-fab:hover {
+  background: var(--brand-dark);
+  transform: scale(1.05);
+}
+.graph-fab svg { width: 20px; height: 20px; }
+
+/* --- Floating minimap --- */
+
+.graph-minimap {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 10;
+  width: 170px;
+  height: 120px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  cursor: pointer;
+}
+.graph-minimap svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.minimap-node {
+  fill: var(--brand-mid);
+  stroke: var(--brand);
+  stroke-width: 1;
+}
+.minimap-node.start { fill: var(--node-success-border); stroke: var(--success); }
+.minimap-node.end { fill: var(--node-danger-border); stroke: var(--danger); }
+.minimap-viewport {
+  fill: var(--brand);
+  fill-opacity: 0.12;
+  stroke: var(--brand);
+  stroke-width: 1.5;
+  pointer-events: none;
 }
 
 .empty-graph-hint {

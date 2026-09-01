@@ -86,7 +86,12 @@
             <button type="button" id="ticket-status-toggle" class="status-toggle"></button>
           </div>
           <div id="ticket-desc" class="ticket-desc markdown-body"></div>
-          <div class="toolbar">
+        </header>
+
+        <div class="graph-area">
+          <svg id="graph-svg" title="Scorri o trascina con il tasto centrale per muovere la vista. Trascina un nodo con Ctrl per allinearlo alla griglia. Trascina un'area vuota per selezionare più nodi."></svg>
+
+          <div class="toolbar floating-toolbar">
             <button id="add-node-btn" class="btn" title="Aggiungi un nuovo passaggio al grafo"><span class="btn-icon" data-icon="plus"></span>Nodo</button>
             <button id="start-node-btn" class="btn" title="Aggiungi (o vai al) nodo di inizio"><span class="btn-icon" data-icon="play"></span>Inizio</button>
             <button id="end-node-btn" class="btn" title="Aggiungi (o vai al) nodo di fine"><span class="btn-icon" data-icon="flag"></span>Fine</button>
@@ -94,10 +99,15 @@
             <button id="center-view-btn" class="btn" title="Centra la vista su tutto il grafo"><span class="btn-icon" data-icon="maximize"></span>Centra</button>
             <button id="export-ticket-btn" class="btn" title="Scarica questo ticket come file .json"><span class="btn-icon" data-icon="download"></span>Esporta</button>
             <button id="delete-selection-btn" class="btn btn-danger-outline" title="Elimina il nodo, il collegamento o la selezione multipla attiva"><span class="btn-icon" data-icon="trash"></span>Elimina selezione</button>
-            <span id="link-hint" class="hint" hidden>Clicca due nodi per collegarli (Esc per annullare)</span>
           </div>
-        </header>
-        <svg id="graph-svg" title="Scorri o trascina con il tasto centrale per muovere la vista. Trascina un nodo con Ctrl per allinearlo alla griglia. Trascina un'area vuota per selezionare più nodi."></svg>
+          <span id="link-hint" class="hint floating-hint" hidden>Clicca due nodi per collegarli (Esc per annullare)</span>
+
+          <button type="button" id="graph-fab" class="graph-fab" title="Aggiungi un nuovo passaggio"></button>
+
+          <div id="graph-minimap" class="graph-minimap" hidden>
+            <svg id="minimap-svg"></svg>
+          </div>
+        </div>
       </div>
     </main>
   </div>
