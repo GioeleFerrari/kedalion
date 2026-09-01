@@ -1274,9 +1274,9 @@ function onNodeClick(node) {
     renderGraph();
     return;
   }
-  toggleDone(node.id);
+  state.selected = { type: 'node', id: node.id };
+  state.multiSelected.clear();
   renderGraph();
-  saveGraph();
 }
 
 function onEdgeClick(edge) {
