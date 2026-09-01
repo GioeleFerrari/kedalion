@@ -909,6 +909,11 @@ el.deleteSelectionBtn.addEventListener('click', () => {
   saveGraph();
 });
 
+function isTypingInField() {
+  const tag = document.activeElement && document.activeElement.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable;
+}
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     state.mode = 'idle';
@@ -918,10 +923,15 @@ document.addEventListener('keydown', (e) => {
     renderGraph();
     closeAllPopovers();
     hideContextMenu();
+    if (!el.searchBox.hidden && document.activeElement === el.searchInput) el.searchBtn.click();
   } else if (e.key === 'Delete' || e.key === 'Backspace') {
     if ((state.selected || state.multiSelected.size > 0) && document.activeElement === document.body) {
       el.deleteSelectionBtn.click();
     }
+  } else if (e.key === '/' && !isTypingInField() && !el.appRoot.hidden) {
+    e.preventDefault();
+    if (el.searchBox.hidden) el.searchBtn.click();
+    else el.searchInput.focus();
   }
 });
 
@@ -1114,7 +1124,13 @@ function onNodeMouseDown(node, e) {
       const n = state.graph.nodes.find((gn) => gn.id === id);
       if (n) starts.set(id, { x: n.x, y: n.y });
     }
-    groupDragState = { startClientX: e.clientX, startClientY: e.clientY, starts, moved: false };
+    groupDragState = {
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      starts,
+      draggedNodeId: node.id,
+      moved: false,
+    };
     return;
   }
 
@@ -1194,8 +1210,15 @@ el.svg.addEventListener('mousemove', (e) => {
     let dx = e.clientX - groupDragState.startClientX;
     let dy = e.clientY - groupDragState.startClientY;
     if (e.ctrlKey || e.metaKey) {
-      dx = snapToGrid(dx);
-      dy = snapToGrid(dy);
+      // Snap the dragged node's own absolute position to the grid, then apply that
+      // same corrected delta to the rest of the group — snapping the raw mouse
+      // delta instead (as before) only ever landed on the grid if the node's
+      // starting position already happened to be grid-aligned.
+      const draggedStart = groupDragState.starts.get(groupDragState.draggedNodeId);
+      if (draggedStart) {
+        dx = snapToGrid(draggedStart.x + dx) - draggedStart.x;
+        dy = snapToGrid(draggedStart.y + dy) - draggedStart.y;
+      }
     }
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) groupDragState.moved = true;
     for (const [id, start] of groupDragState.starts) {
@@ -1266,18 +1289,14 @@ el.svg.addEventListener('mouseleave', () => {
   }
 });
 
-// Edges only ever latch onto the midpoint of one side (N/S/E/W), never an
-// arbitrary point along the border, so every connection lines up with the
-// others instead of hitting odd diagonal spots on the node.
-function cardinalPoint(node, towardX, towardY) {
+function rectBorderPoint(node, towardX, towardY) {
   const w = nodeWidth(node) / 2;
   const h = NODE_HEIGHT / 2;
   const dx = towardX - node.x;
   const dy = towardY - node.y;
-  if (Math.abs(dx) >= Math.abs(dy)) {
-    return { x: node.x + (dx >= 0 ? w : -w), y: node.y };
-  }
-  return { x: node.x, y: node.y + (dy >= 0 ? h : -h) };
+  if (dx === 0 && dy === 0) return { x: node.x, y: node.y };
+  const scale = 1 / Math.max(Math.abs(dx) / w, Math.abs(dy) / h);
+  return { x: node.x + dx * scale, y: node.y + dy * scale };
 }
 
 function svgIconGroup(name, cx, cy, size, className) {
@@ -1319,8 +1338,8 @@ function renderGraph() {
     const from = state.graph.nodes.find((n) => n.id === edge.from);
     const to = state.graph.nodes.find((n) => n.id === edge.to);
     if (!from || !to) continue;
-    const start = cardinalPoint(from, to.x, to.y);
-    const end = cardinalPoint(to, from.x, from.y);
+    const start = rectBorderPoint(from, to.x, to.y);
+    const end = rectBorderPoint(to, from.x, from.y);
     const line = document.createElementNS(SVG_NS, 'line');
     line.setAttribute('x1', start.x);
     line.setAttribute('y1', start.y);

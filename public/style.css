@@ -593,6 +593,9 @@ body {
   filter: drop-shadow(0 1px 1px rgba(33, 26, 44, 0.05)) drop-shadow(0 4px 8px rgba(33, 26, 44, 0.06));
   transition: filter 0.15s, stroke 0.15s;
 }
+.node-rect:active {
+  cursor: grabbing;
+}
 .node-rect:hover {
   filter: drop-shadow(0 1px 1px rgba(33, 26, 44, 0.06)) drop-shadow(0 6px 14px rgba(33, 26, 44, 0.1));
 }

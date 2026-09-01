@@ -81,16 +81,16 @@
           <h2 id="ticket-title"></h2>
           <div id="ticket-desc" class="ticket-desc markdown-body"></div>
           <div class="toolbar">
-            <button id="add-node-btn" class="btn"><span class="btn-icon" data-icon="plus"></span>Nodo</button>
-            <button id="start-node-btn" class="btn"><span class="btn-icon" data-icon="play"></span>Inizio</button>
-            <button id="end-node-btn" class="btn"><span class="btn-icon" data-icon="flag"></span>Fine</button>
-            <button id="link-mode-btn" class="btn"><span class="btn-icon" data-icon="link"></span>Collega nodi</button>
-            <button id="export-ticket-btn" class="btn"><span class="btn-icon" data-icon="download"></span>Esporta</button>
-            <button id="delete-selection-btn" class="btn btn-danger-outline"><span class="btn-icon" data-icon="trash"></span>Elimina selezione</button>
+            <button id="add-node-btn" class="btn" title="Aggiungi un nuovo passaggio al grafo"><span class="btn-icon" data-icon="plus"></span>Nodo</button>
+            <button id="start-node-btn" class="btn" title="Aggiungi (o vai al) nodo di inizio"><span class="btn-icon" data-icon="play"></span>Inizio</button>
+            <button id="end-node-btn" class="btn" title="Aggiungi (o vai al) nodo di fine"><span class="btn-icon" data-icon="flag"></span>Fine</button>
+            <button id="link-mode-btn" class="btn" title="Clicca due nodi in sequenza per collegarli"><span class="btn-icon" data-icon="link"></span>Collega nodi</button>
+            <button id="export-ticket-btn" class="btn" title="Scarica questo ticket come file .json"><span class="btn-icon" data-icon="download"></span>Esporta</button>
+            <button id="delete-selection-btn" class="btn btn-danger-outline" title="Elimina il nodo, il collegamento o la selezione multipla attiva"><span class="btn-icon" data-icon="trash"></span>Elimina selezione</button>
             <span id="link-hint" class="hint" hidden>Clicca due nodi per collegarli (Esc per annullare)</span>
           </div>
         </header>
-        <svg id="graph-svg"></svg>
+        <svg id="graph-svg" title="Trascina un nodo tenendo premuto Ctrl per allinearlo alla griglia. Trascina un'area vuota per selezionare più nodi."></svg>
       </div>
     </main>
   </div>
