@@ -672,20 +672,6 @@ body {
   pointer-events: none;
 }
 
-.node-badge circle {
-  stroke: #fff;
-  stroke-width: 1.5;
-}
-.node-badge.start circle {
-  fill: var(--success);
-}
-.node-badge.end circle {
-  fill: var(--danger);
-}
-.node-badge-icon {
-  color: #fff;
-}
-
 .node-label {
   font-size: 13px;
   font-weight: 600;

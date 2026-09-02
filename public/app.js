@@ -2297,29 +2297,8 @@ function renderGraph() {
     }
     group.appendChild(rect);
 
-    const badgeKind = node.nodeType || null;
-    if (badgeKind) {
-      const badgeCx = node.x - w / 2 + 22;
-      const badge = document.createElementNS(SVG_NS, 'g');
-      badge.setAttribute('class', `node-badge ${badgeKind}`);
-      badge.style.pointerEvents = 'none';
-      const badgeCircle = document.createElementNS(SVG_NS, 'circle');
-      badgeCircle.setAttribute('cx', badgeCx);
-      badgeCircle.setAttribute('cy', node.y);
-      badgeCircle.setAttribute('r', 10);
-      badge.appendChild(badgeCircle);
-      const badgeIconName = badgeKind === 'start' ? 'play' : 'flag';
-      const badgeIcon = svgIconGroup(badgeIconName, badgeCx, node.y, 12, 'node-badge-icon');
-      if (badgeIconName === 'play') {
-        badgeIcon.setAttribute('fill', 'currentColor');
-        badgeIcon.setAttribute('stroke', 'none');
-      }
-      badge.appendChild(badgeIcon);
-      group.appendChild(badge);
-    }
-
     const text = document.createElementNS(SVG_NS, 'text');
-    text.setAttribute('x', node.x + (badgeKind ? 12 : 0));
+    text.setAttribute('x', node.x);
     text.setAttribute('y', node.y);
     text.setAttribute(
       'class',
