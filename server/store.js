@@ -163,6 +163,39 @@ function saveGraph(userId, id, graph) {
   return clean;
 }
 
+// Returns the ids of tickets whose graph has at least one node whose label or
+// description contains the query (case-insensitive). Reads every graph for the
+// user, which is fine at the scale this app runs at (a personal ticket list);
+// there's no indexed way to search inside the JSON blob otherwise.
+function searchTicketIdsByNodeContent(userId, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const rows = db
+    .prepare(
+      `SELECT g.ticket_id AS ticketId, g.data FROM graphs g
+       JOIN tickets t ON t.id = g.ticket_id
+       WHERE t.user_id = ?`
+    )
+    .all(userId);
+  const matches = [];
+  for (const row of rows) {
+    let data;
+    try {
+      data = JSON.parse(row.data);
+    } catch {
+      continue;
+    }
+    const nodes = Array.isArray(data.nodes) ? data.nodes : [];
+    const hit = nodes.some((n) => {
+      const label = (n.label || '').toLowerCase();
+      const description = (n.description || '').toLowerCase();
+      return label.includes(q) || description.includes(q);
+    });
+    if (hit) matches.push(row.ticketId);
+  }
+  return matches;
+}
+
 // --- Folders ---
 
 function folderRowToJson(row) {
@@ -171,7 +204,7 @@ function folderRowToJson(row) {
 
 function listFolders(userId) {
   return db
-    .prepare('SELECT * FROM folders WHERE user_id = ? ORDER BY name COLLATE NOCASE')
+    .prepare('SELECT * FROM folders WHERE user_id = ? ORDER BY sort_order, name COLLATE NOCASE')
     .all(userId)
     .map(folderRowToJson);
 }
@@ -179,13 +212,29 @@ function listFolders(userId) {
 function createFolder(userId, { name }) {
   const id = genId();
   const now = new Date().toISOString();
-  db.prepare('INSERT INTO folders (id, user_id, name, created_at) VALUES (?, ?, ?, ?)').run(
+  const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM folders WHERE user_id = ?').get(userId).m;
+  db.prepare('INSERT INTO folders (id, user_id, name, sort_order, created_at) VALUES (?, ?, ?, ?, ?)').run(
     id,
     userId,
     name,
+    maxOrder + 1,
     now
   );
   return folderRowToJson({ id, name, created_at: now });
+}
+
+// Applies a new manual order to the user's folders: orderIds is the full list of
+// folder ids in the desired order, so each one's sort_order becomes its index.
+// Ids that aren't valid or don't belong to this user are silently skipped.
+function reorderFolders(userId, orderIds) {
+  if (!Array.isArray(orderIds)) return;
+  const setOrder = db.prepare('UPDATE folders SET sort_order = ? WHERE id = ? AND user_id = ?');
+  const tx = db.transaction((ids) => {
+    ids.forEach((id, i) => {
+      if (isValidId(id)) setOrder.run(i, id, userId);
+    });
+  });
+  tx(orderIds);
 }
 
 function deleteFolder(userId, id) {
@@ -208,7 +257,9 @@ module.exports = {
   deleteTicket,
   getGraph,
   saveGraph,
+  searchTicketIdsByNodeContent,
   listFolders,
   createFolder,
+  reorderFolders,
   deleteFolder,
 };

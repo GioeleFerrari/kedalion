@@ -8,6 +8,7 @@ const state = {
   selected: null, // { type: 'node'|'edge', id }
   multiSelected: new Set(), // node ids selected via marquee / shift-click, moved together
   searchQuery: '',
+  searchNodeMatchIds: new Set(), // ticket ids matched by node label/description, filled in async by /api/search
   collapsedFolders: new Set(),
   pan: { x: 0, y: 0 }, // canvas viewport offset, lets a graph wider than the screen be scrolled/panned
   zoom: 1,
@@ -307,7 +308,7 @@ el.nodeFormHeaderIcon.innerHTML = svgIcon('pencil', 14);
 el.nodeFormClose.innerHTML = svgIcon('x', 13);
 el.ticketFormHeaderIcon.innerHTML = svgIcon('ticket', 14);
 el.ticketFormClose.innerHTML = svgIcon('x', 13);
-el.folderFormHeaderIcon.innerHTML = svgIcon('folder', 14);
+el.folderFormHeaderIcon.innerHTML = svgIconSolid('folder', 14);
 el.folderFormClose.innerHTML = svgIcon('x', 13);
 el.loginBrandIcon.innerHTML = svgIcon('ticket', 26);
 el.githubLoginIcon.innerHTML = svgIconSolid('github', 18);
@@ -487,7 +488,7 @@ function populateFolderSelect() {
 function renderTicketTree() {
   const query = state.searchQuery.trim().toLowerCase();
   const filtered = query
-    ? state.tickets.filter((t) => t.title.toLowerCase().includes(query))
+    ? state.tickets.filter((t) => t.title.toLowerCase().includes(query) || state.searchNodeMatchIds.has(t.id))
     : state.tickets;
 
   el.ticketTree.innerHTML = '';
@@ -543,7 +544,7 @@ function renderFolderGroup(folder, tickets) {
   header.className = 'folder-header' + (collapsed ? ' collapsed' : '');
   header.innerHTML = `
     <span class="chevron">${svgIcon('chevronDown', 14)}</span>
-    <span class="folder-icon">${svgIcon('folder', 14)}</span>
+    <span class="folder-icon">${svgIconSolid('folder', 14)}</span>
     <span class="folder-name"></span>
     <span class="folder-count"></span>
     ${folder ? `<button class="folder-delete" title="Elimina cartella">${svgIcon('trash', 13)}</button>` : ''}
@@ -561,6 +562,20 @@ function renderFolderGroup(folder, tickets) {
     renderTicketTree();
   });
 
+  // Folder headers are themselves draggable (to reorder folders among each other),
+  // separately from tickets being dragged onto them (to file/move a ticket) — the
+  // two drags are told apart by which dataTransfer type carries the payload.
+  if (folder) {
+    header.draggable = true;
+    header.addEventListener('dragstart', (e) => {
+      e.stopPropagation();
+      e.dataTransfer.setData('application/x-kedalion-folder', folder.id);
+      e.dataTransfer.effectAllowed = 'move';
+      header.classList.add('dragging');
+    });
+    header.addEventListener('dragend', () => header.classList.remove('dragging'));
+  }
+
   header.addEventListener('dragover', (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -570,6 +585,20 @@ function renderFolderGroup(folder, tickets) {
   header.addEventListener('drop', async (e) => {
     e.preventDefault();
     header.classList.remove('drop-target');
+
+    if (e.dataTransfer.types.includes('application/x-kedalion-folder')) {
+      const draggedFolderId = e.dataTransfer.getData('application/x-kedalion-folder');
+      if (!folder || draggedFolderId === folder.id) return;
+      const order = state.folders.map((f) => f.id);
+      const fromIndex = order.indexOf(draggedFolderId);
+      if (fromIndex === -1) return;
+      order.splice(fromIndex, 1);
+      order.splice(order.indexOf(folder.id), 0, draggedFolderId);
+      await api('/api/folders/reorder', { method: 'PUT', body: JSON.stringify({ orderIds: order }) });
+      await loadAll();
+      return;
+    }
+
     const ticketId = e.dataTransfer.getData('text/plain');
     if (!ticketId) return;
     const ticket = state.tickets.find((t) => t.id === ticketId);
@@ -673,6 +702,10 @@ async function selectTicket(id) {
   marqueeState = null;
   suppressNextClick = false;
   suppressNextCanvasClick = false;
+  if (groupDragRenderPending) {
+    cancelAnimationFrame(groupDragRenderHandle);
+    groupDragRenderPending = false;
+  }
   resetUndoHistory();
 
   const ticket = state.tickets.find((t) => t.id === id) || (await api(`/api/tickets/${id}`));
@@ -705,13 +738,33 @@ el.searchBtn.addEventListener('click', () => {
   } else {
     el.searchInput.value = '';
     state.searchQuery = '';
+    state.searchNodeMatchIds = new Set();
+    clearTimeout(searchDebounceTimer);
     renderTicketTree();
   }
 });
 
+let searchDebounceTimer = null;
+
 el.searchInput.addEventListener('input', () => {
   state.searchQuery = el.searchInput.value;
+  state.searchNodeMatchIds = new Set();
   renderTicketTree();
+
+  clearTimeout(searchDebounceTimer);
+  const q = state.searchQuery.trim();
+  if (!q) return;
+  searchDebounceTimer = setTimeout(async () => {
+    try {
+      const result = await api(`/api/search?q=${encodeURIComponent(q)}`);
+      if (state.searchQuery.trim() !== q) return; // query changed while the request was in flight
+      state.searchNodeMatchIds = new Set(result.ticketIds);
+      renderTicketTree();
+    } catch {
+      // a failed background search just means no extra node matches — the title
+      // filter above still works, so this fails silently rather than with a toast.
+    }
+  }, 250);
 });
 
 el.newTicketBtn.addEventListener('click', () => {
@@ -1648,6 +1701,14 @@ let dragState = null;
 let groupDragState = null;
 let suppressNextClick = false;
 
+// Group drag re-renders the whole graph on every position update; coalescing
+// those into one render per animation frame (instead of one per raw mousemove,
+// which fires faster than the screen can paint) removes the jerkiness a fast
+// drag had before, without touching how positions are computed.
+let groupDragRenderPending = false;
+let groupDragRenderHandle = null;
+let groupDragPendingGuide = { x: null, y: null };
+
 function onNodeMouseDown(node, e) {
   if (e.button !== 0) return; // let a middle-click pass through to the canvas-level pan handler
   if (state.mode === 'link') return;
@@ -1857,8 +1918,15 @@ el.svg.addEventListener('mousemove', (e) => {
         n.y = start.y + dy;
       }
     }
-    renderGraph();
-    renderAlignGuides(guideX, guideY);
+    groupDragPendingGuide = { x: guideX, y: guideY };
+    if (!groupDragRenderPending) {
+      groupDragRenderPending = true;
+      groupDragRenderHandle = requestAnimationFrame(() => {
+        groupDragRenderPending = false;
+        renderGraph();
+        renderAlignGuides(groupDragPendingGuide.x, groupDragPendingGuide.y);
+      });
+    }
     return;
   }
 
@@ -1903,6 +1971,11 @@ el.svg.addEventListener('mouseup', () => {
     return;
   }
   if (groupDragState) {
+    if (groupDragRenderPending) {
+      cancelAnimationFrame(groupDragRenderHandle);
+      groupDragRenderPending = false;
+      renderGraph();
+    }
     if (groupDragState.moved) {
       suppressNextClick = true;
       saveGraph();
@@ -1929,6 +2002,11 @@ el.svg.addEventListener('mouseleave', () => {
     if (stray) stray.remove();
   }
   if (groupDragState) {
+    if (groupDragRenderPending) {
+      cancelAnimationFrame(groupDragRenderHandle);
+      groupDragRenderPending = false;
+      renderGraph();
+    }
     if (groupDragState.moved) saveGraph();
     groupDragState = null;
     clearAlignGuides();

@@ -120,6 +120,37 @@ body {
   align-items: center;
   gap: 6px;
 }
+.login-illustration {
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+  margin-bottom: 6px;
+}
+.li-node {
+  fill: var(--surface);
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+.li-node.li-start {
+  fill: var(--success-bg);
+  stroke: var(--node-success-border);
+}
+.li-node.li-done {
+  fill: var(--success-bg);
+  stroke: var(--node-success-border);
+}
+.li-node.li-end {
+  fill: var(--danger-bg);
+  stroke: var(--node-danger-border);
+}
+.li-edge {
+  stroke: var(--edge-color);
+  stroke-width: 1.5;
+}
+.li-arrow {
+  fill: var(--edge-color);
+}
+
 .login-brand-mark {
   width: 48px;
   height: 48px;
@@ -1083,7 +1114,7 @@ body {
   color: var(--brand-dark);
 }
 
-/* --- Drag & drop tickets into folders --- */
+/* --- Drag & drop: tickets into folders, folders to reorder --- */
 
 .folder-header.drop-target {
   background: var(--brand-light);
@@ -1094,6 +1125,12 @@ body {
   cursor: grab;
 }
 .ticket-item.dragging {
+  opacity: 0.5;
+}
+.folder-header[draggable="true"] {
+  cursor: grab;
+}
+.folder-header.dragging {
   opacity: 0.5;
 }
 

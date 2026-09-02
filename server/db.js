@@ -23,6 +23,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
   );
 
@@ -46,6 +47,17 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_tickets_user ON tickets(user_id);
   CREATE INDEX IF NOT EXISTS idx_tickets_folder ON tickets(folder_id);
 `);
+
+// Older databases were created before folders had a manual sort order (they were
+// always listed alphabetically); add the column and backfill it with that same
+// alphabetical order so existing folder lists don't visibly reshuffle.
+const folderColumns = db.prepare('PRAGMA table_info(folders)').all().map((c) => c.name);
+if (!folderColumns.includes('sort_order')) {
+  db.exec('ALTER TABLE folders ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');
+  const rows = db.prepare('SELECT id FROM folders ORDER BY name COLLATE NOCASE').all();
+  const setOrder = db.prepare('UPDATE folders SET sort_order = ? WHERE id = ?');
+  rows.forEach((row, i) => setOrder.run(i, row.id));
+}
 
 // --- One-off migration from the old per-file JSON storage (data/tickets, data/folders, data/graphs) ---
 // Anything found there is attached to a placeholder "Ticket locali" account so nothing is lost;

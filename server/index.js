@@ -89,9 +89,20 @@ app.post('/api/folders', (req, res) => {
   res.status(201).json(folder);
 });
 
+app.put('/api/folders/reorder', (req, res) => {
+  const { orderIds } = req.body || {};
+  store.reorderFolders(req.session.userId, orderIds);
+  res.json(store.listFolders(req.session.userId));
+});
+
 app.delete('/api/folders/:id', (req, res) => {
   store.deleteFolder(req.session.userId, req.params.id);
   res.status(204).end();
+});
+
+app.get('/api/search', (req, res) => {
+  const q = typeof req.query.q === 'string' ? req.query.q : '';
+  res.json({ ticketIds: store.searchTicketIdsByNodeContent(req.session.userId, q) });
 });
 
 app.get('/api/tickets/:id/graph', (req, res) => {
