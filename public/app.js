@@ -670,7 +670,7 @@ function slugifyFilename(title) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-  return (slug || 'ticket') + '.json';
+  return (slug || 'ticket') + '.kn';
 }
 
 el.exportTicketBtn.addEventListener('click', () => {
