@@ -34,7 +34,6 @@ const el = {
   autoLayoutBtn: document.getElementById('auto-layout-btn'),
   undoBtn: document.getElementById('undo-btn'),
   redoBtn: document.getElementById('redo-btn'),
-  saveStatus: document.getElementById('save-status'),
   deleteSelectionBtn: document.getElementById('delete-selection-btn'),
   linkHint: document.getElementById('link-hint'),
   contextMenu: document.getElementById('context-menu'),
@@ -655,8 +654,6 @@ async function selectTicket(id) {
   suppressNextClick = false;
   suppressNextCanvasClick = false;
   resetUndoHistory();
-  clearTimeout(saveStatusTimer);
-  el.saveStatus.hidden = true;
 
   const ticket = state.tickets.find((t) => t.id === id) || (await api(`/api/tickets/${id}`));
   el.ticketTitle.textContent = ticket.title;
@@ -1054,31 +1051,13 @@ function updateLinkModeUI() {
   el.linkHint.hidden = state.mode !== 'link';
 }
 
-let saveStatusTimer = null;
-
-function setSaveStatus(kind) {
-  clearTimeout(saveStatusTimer);
-  el.saveStatus.hidden = false;
-  el.saveStatus.className = 'save-status ' + kind;
-  el.saveStatus.textContent =
-    kind === 'saving' ? 'Salvataggio…' : kind === 'error' ? 'Salvataggio non riuscito' : 'Salvato';
-  if (kind === 'saved') {
-    saveStatusTimer = setTimeout(() => {
-      el.saveStatus.hidden = true;
-    }, 2000);
-  }
-}
-
 async function saveGraph() {
-  setSaveStatus('saving');
   try {
     await api(`/api/tickets/${state.currentTicketId}/graph`, {
       method: 'PUT',
       body: JSON.stringify(state.graph),
     });
-    setSaveStatus('saved');
   } catch (err) {
-    setSaveStatus('error');
     showToast('Salvataggio non riuscito: controlla la connessione e riprova.', 'error');
   }
 }

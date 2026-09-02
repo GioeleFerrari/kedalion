@@ -603,16 +603,6 @@ body {
   margin: 2px 0;
 }
 
-.save-status {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink-faint);
-  margin-left: auto;
-  transition: opacity 0.2s;
-}
-.save-status.saved { color: var(--success); }
-.save-status.error { color: var(--danger); }
-
 #graph-svg {
   flex: 1;
   width: 100%;
