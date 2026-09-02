@@ -1748,7 +1748,12 @@ function hideContextMenu() {
 document.addEventListener('click', (e) => {
   if (!el.contextMenu.hidden && !el.contextMenu.contains(e.target)) hideContextMenu();
 });
+// Suppresses the browser's native right-click menu everywhere on the page (not
+// just on nodes/edges/folders/tickets, which already open a custom menu here) —
+// this always wins since it's on document and every other contextmenu handler
+// fires first and bubbles up to it.
 document.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
   if (!el.contextMenu.contains(e.target) && !el.svg.contains(e.target)) hideContextMenu();
 });
 
