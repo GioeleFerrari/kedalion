@@ -120,37 +120,6 @@ body {
   align-items: center;
   gap: 6px;
 }
-.login-illustration {
-  width: 100%;
-  max-width: 220px;
-  height: auto;
-  margin-bottom: 6px;
-}
-.li-node {
-  fill: var(--surface);
-  stroke: var(--border);
-  stroke-width: 1.5;
-}
-.li-node.li-start {
-  fill: var(--success-bg);
-  stroke: var(--node-success-border);
-}
-.li-node.li-done {
-  fill: var(--success-bg);
-  stroke: var(--node-success-border);
-}
-.li-node.li-end {
-  fill: var(--danger-bg);
-  stroke: var(--node-danger-border);
-}
-.li-edge {
-  stroke: var(--edge-color);
-  stroke-width: 1.5;
-}
-.li-arrow {
-  fill: var(--edge-color);
-}
-
 .login-brand-mark {
   width: 48px;
   height: 48px;
