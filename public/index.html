@@ -202,6 +202,17 @@
     </form>
   </div>
 
+  <div id="cmdk-overlay" class="cmdk-overlay" hidden>
+    <div class="cmdk-dialog" role="dialog" aria-modal="true">
+      <div class="cmdk-input-row">
+        <span class="cmdk-search-icon" id="cmdk-search-icon"></span>
+        <input id="cmdk-input" type="text" placeholder="Cerca un ticket o un comando..." autocomplete="off" />
+      </div>
+      <div id="cmdk-list" class="cmdk-list"></div>
+      <p id="cmdk-empty" class="cmdk-empty" hidden>Nessun risultato.</p>
+    </div>
+  </div>
+
   <div id="toast" class="toast" hidden></div>
 
   <div id="confirm-overlay" class="confirm-overlay" hidden>

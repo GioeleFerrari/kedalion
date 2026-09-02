@@ -10,6 +10,7 @@ const state = {
   searchQuery: '',
   collapsedFolders: new Set(),
   pan: { x: 0, y: 0 }, // canvas viewport offset, lets a graph wider than the screen be scrolled/panned
+  zoom: 1,
 };
 
 const el = {
@@ -94,6 +95,12 @@ const el = {
 
   toast: document.getElementById('toast'),
 
+  cmdkOverlay: document.getElementById('cmdk-overlay'),
+  cmdkInput: document.getElementById('cmdk-input'),
+  cmdkList: document.getElementById('cmdk-list'),
+  cmdkEmpty: document.getElementById('cmdk-empty'),
+  cmdkSearchIcon: document.getElementById('cmdk-search-icon'),
+
   confirmOverlay: document.getElementById('confirm-overlay'),
   confirmIcon: document.getElementById('confirm-icon'),
   confirmTitle: document.getElementById('confirm-title'),
@@ -156,10 +163,14 @@ function nodeWidth() {
 }
 
 // Converts a mouse event's viewport coordinates into graph space (i.e. undoes the
-// current pan offset), since the canvas can be scrolled independently of the nodes.
+// current pan/zoom), since the canvas can be scrolled and zoomed independently of
+// the nodes' own coordinates.
 function clientToGraph(clientX, clientY) {
   const rect = el.svg.getBoundingClientRect();
-  return { x: clientX - rect.left - state.pan.x, y: clientY - rect.top - state.pan.y };
+  return {
+    x: (clientX - rect.left - state.pan.x) / state.zoom,
+    y: (clientY - rect.top - state.pan.y) / state.zoom,
+  };
 }
 
 function viewCenterGraphPoint() {
@@ -167,10 +178,14 @@ function viewCenterGraphPoint() {
   return clientToGraph(rect.left + rect.width / 2, rect.top + rect.height / 2);
 }
 
-// Pans the view so the whole graph is centered in the visible canvas.
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 2.5;
+
+// Pans (and resets zoom) so the whole graph is centered and fully visible in the canvas.
 function centerGraphView() {
   const rect = el.svg.getBoundingClientRect();
   const nodes = state.graph.nodes;
+  state.zoom = 1;
   if (nodes.length === 0) {
     state.pan = { x: 0, y: 0 };
     return;
@@ -259,11 +274,15 @@ el.autoLayoutBtn.addEventListener('click', () => {
   saveGraph();
 });
 
-// Cheap panning update: just move the existing group instead of rebuilding the
-// whole graph (nodes/edges/listeners) on every wheel tick or pan-drag frame.
+function graphTransformString() {
+  return `translate(${state.pan.x}, ${state.pan.y}) scale(${state.zoom})`;
+}
+
+// Cheap panning/zooming update: just move the existing group instead of rebuilding
+// the whole graph (nodes/edges/listeners) on every wheel tick or pan-drag frame.
 function applyPanTransform() {
   const viewport = el.svg.querySelector('.graph-viewport');
-  if (viewport) viewport.setAttribute('transform', `translate(${state.pan.x}, ${state.pan.y})`);
+  if (viewport) viewport.setAttribute('transform', graphTransformString());
 }
 
 function truncateLabel(label) {
@@ -281,6 +300,7 @@ el.importBtn.innerHTML = svgIcon('upload', 16);
 el.nodeViewEdit.innerHTML = svgIcon('pencil', 13);
 el.undoBtn.innerHTML = svgIcon('undo', 15);
 el.redoBtn.innerHTML = svgIcon('redo', 15);
+el.cmdkSearchIcon.innerHTML = svgIcon('search', 15);
 el.nodeViewClose.innerHTML = svgIcon('x', 13);
 el.nodeViewHeaderIcon.innerHTML = svgIcon('info', 14);
 el.nodeFormHeaderIcon.innerHTML = svgIcon('pencil', 14);
@@ -594,9 +614,9 @@ function renderFolderGroup(folder, tickets) {
 
 function renderTicketItem(t) {
   const item = document.createElement('div');
-  const statusClass = t.status === 'done' ? 'status-done' : 'status-open';
-  item.className = `ticket-item ${statusClass}` + (t.id === state.currentTicketId ? ' active' : '');
+  item.className = 'ticket-item' + (t.id === state.currentTicketId ? ' active' : '');
   item.innerHTML = `
+    <span class="t-icon">${svgIcon('ticket', 14)}</span>
     <div class="t-info">
       <div class="t-title"></div>
     </div>
@@ -1226,7 +1246,164 @@ function isTypingInField() {
   return tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable;
 }
 
+// Centers the view on a single node (used by Tab navigation and the "vai a
+// Inizio/Fine" command) without touching the current zoom level.
+function panToNode(node) {
+  const rect = el.svg.getBoundingClientRect();
+  state.pan.x = rect.width / 2 - node.x * state.zoom;
+  state.pan.y = rect.height / 2 - node.y * state.zoom;
+}
+
+function jumpToSpecialNode(nodeType) {
+  const node = state.graph.nodes.find((n) => n.nodeType === nodeType);
+  if (!node) {
+    showToast(nodeType === 'start' ? 'Nessun nodo di Inizio in questo grafo.' : 'Nessun nodo di Fine in questo grafo.', 'error');
+    return;
+  }
+  state.selected = { type: 'node', id: node.id };
+  state.multiSelected.clear();
+  panToNode(node);
+  renderGraph();
+}
+
+// Tab / Shift+Tab step through the graph's nodes without the mouse, in a stable
+// left-to-right, top-to-bottom reading order (independent of edges, so it still
+// works on graphs with disconnected branches).
+function stepNodeSelection(reverse) {
+  const nodes = [...state.graph.nodes].sort((a, b) => a.x - b.x || a.y - b.y);
+  if (nodes.length === 0) return;
+  const currentId = state.selected && state.selected.type === 'node' ? state.selected.id : null;
+  const currentIndex = nodes.findIndex((n) => n.id === currentId);
+  let nextIndex;
+  if (reverse) {
+    nextIndex = currentIndex <= 0 ? nodes.length - 1 : currentIndex - 1;
+  } else {
+    nextIndex = currentIndex === -1 || currentIndex === nodes.length - 1 ? 0 : currentIndex + 1;
+  }
+  const node = nodes[nextIndex];
+  state.selected = { type: 'node', id: node.id };
+  state.multiSelected.clear();
+  panToNode(node);
+  renderGraph();
+}
+
+// --- Command palette (Ctrl+K) ---
+
+let cmdkFiltered = [];
+let cmdkActiveIndex = 0;
+
+function buildCommandList() {
+  const items = [];
+  const ticketOpen = !el.ticketView.hidden;
+
+  items.push({ icon: 'plus', label: 'Nuovo ticket', hint: 'Crea', action: () => el.newTicketBtn.click() });
+  items.push({ icon: 'folderPlus', label: 'Nuova cartella', hint: 'Crea', action: () => el.newFolderBtn.click() });
+  items.push({ icon: 'sun', label: 'Cambia tema chiaro/scuro', hint: 'Vista', action: () => el.themeToggleBtn.click() });
+  items.push({
+    icon: 'panelLeft',
+    label: 'Comprimi/espandi sidebar',
+    hint: 'Vista',
+    action: () => setSidebarCollapsed(!el.sidebar.classList.contains('collapsed')),
+  });
+
+  if (ticketOpen) {
+    items.push({ icon: 'plus', label: 'Aggiungi nodo', hint: 'Grafo', action: () => el.addNodeBtn.click() });
+    items.push({ icon: 'play', label: 'Vai al nodo di Inizio', hint: 'Grafo', action: () => jumpToSpecialNode('start') });
+    items.push({ icon: 'flag', label: 'Vai al nodo di Fine', hint: 'Grafo', action: () => jumpToSpecialNode('end') });
+    items.push({ icon: 'layoutGrid', label: 'Riordina automaticamente i nodi', hint: 'Grafo', action: () => el.autoLayoutBtn.click() });
+    items.push({ icon: 'maximize', label: 'Centra vista', hint: 'Grafo', action: () => el.centerViewBtn.click() });
+    items.push({ icon: 'download', label: 'Esporta questo ticket', hint: 'Grafo', action: () => el.exportTicketBtn.click() });
+  }
+
+  for (const t of state.tickets) {
+    const folder = state.folders.find((f) => f.id === t.folderId);
+    items.push({
+      icon: 'ticket',
+      label: t.title,
+      hint: folder ? folder.name : 'Senza cartella',
+      action: () => selectTicket(t.id),
+    });
+  }
+  return items;
+}
+
+function setCmdkActive(index) {
+  cmdkActiveIndex = index;
+  el.cmdkList.querySelectorAll('.cmdk-item').forEach((row, i) => {
+    row.classList.toggle('active', i === index);
+    if (i === index) row.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+function runCommand(item) {
+  closeCommandPalette();
+  item.action();
+}
+
+function renderCommandList(query) {
+  const q = query.trim().toLowerCase();
+  const all = buildCommandList();
+  cmdkFiltered = (q ? all.filter((it) => it.label.toLowerCase().includes(q) || (it.hint || '').toLowerCase().includes(q)) : all).slice(0, 40);
+  el.cmdkList.innerHTML = '';
+  el.cmdkEmpty.hidden = cmdkFiltered.length > 0;
+  cmdkFiltered.forEach((item, i) => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'cmdk-item';
+    row.innerHTML = '<span class="cmdk-item-icon"></span><span class="cmdk-item-label"></span><span class="cmdk-item-hint"></span>';
+    row.querySelector('.cmdk-item-icon').innerHTML = svgIcon(item.icon, 15);
+    row.querySelector('.cmdk-item-label').textContent = item.label;
+    row.querySelector('.cmdk-item-hint').textContent = item.hint || '';
+    row.addEventListener('mouseenter', () => setCmdkActive(i));
+    row.addEventListener('click', () => runCommand(item));
+    el.cmdkList.appendChild(row);
+  });
+  setCmdkActive(0);
+}
+
+function openCommandPalette() {
+  closeAllPopovers();
+  hideContextMenu();
+  el.cmdkInput.value = '';
+  renderCommandList('');
+  el.cmdkOverlay.hidden = false;
+  requestAnimationFrame(() => el.cmdkInput.focus());
+}
+
+function closeCommandPalette() {
+  el.cmdkOverlay.hidden = true;
+}
+
+el.cmdkInput.addEventListener('input', () => renderCommandList(el.cmdkInput.value));
+el.cmdkOverlay.addEventListener('click', (e) => {
+  if (e.target === el.cmdkOverlay) closeCommandPalette();
+});
+el.cmdkInput.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (cmdkFiltered.length > 0) setCmdkActive((cmdkActiveIndex + 1) % cmdkFiltered.length);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (cmdkFiltered.length > 0) setCmdkActive((cmdkActiveIndex - 1 + cmdkFiltered.length) % cmdkFiltered.length);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const item = cmdkFiltered[cmdkActiveIndex];
+    if (item) runCommand(item);
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    closeCommandPalette();
+  }
+});
+
 document.addEventListener('keydown', (e) => {
+  if (!el.cmdkOverlay.hidden) {
+    return; // the palette's own input keydown handler (above) owns arrows/enter/escape while open
+  }
+  if (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    openCommandPalette();
+    return;
+  }
   if (!el.confirmOverlay.hidden) {
     if (e.key === 'Escape') closeConfirm(false);
     else if (e.key === 'Enter') closeConfirm(true);
@@ -1260,6 +1437,10 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key.toLowerCase() === 'y' && (e.ctrlKey || e.metaKey) && !isTypingInField() && !el.ticketView.hidden) {
     e.preventDefault();
     doRedo();
+  } else if (e.key === 'Tab' && !isTypingInField() && !openPopoverEl && el.contextMenu.hidden && !el.ticketView.hidden) {
+    if (state.graph.nodes.length === 0) return;
+    e.preventDefault();
+    stepNodeSelection(e.shiftKey);
   }
 });
 
@@ -1285,6 +1466,17 @@ el.svg.addEventListener('mousedown', (e) => {
 
 el.svg.addEventListener('wheel', (e) => {
   e.preventDefault();
+  if (e.ctrlKey || e.metaKey) {
+    const rect = el.svg.getBoundingClientRect();
+    const graphPoint = clientToGraph(e.clientX, e.clientY);
+    const factor = Math.exp(-e.deltaY * 0.0015);
+    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, state.zoom * factor));
+    state.pan.x = e.clientX - rect.left - graphPoint.x * newZoom;
+    state.pan.y = e.clientY - rect.top - graphPoint.y * newZoom;
+    state.zoom = newZoom;
+    applyPanTransform();
+    return;
+  }
   state.pan.x -= e.deltaX;
   state.pan.y -= e.deltaY;
   applyPanTransform();
@@ -1797,7 +1989,7 @@ function renderGraph() {
   // scrolled when the graph is wider/taller than what's visible.
   const viewport = document.createElementNS(SVG_NS, 'g');
   viewport.setAttribute('class', 'graph-viewport');
-  viewport.setAttribute('transform', `translate(${state.pan.x}, ${state.pan.y})`);
+  viewport.setAttribute('transform', graphTransformString());
   el.svg.appendChild(viewport);
 
   for (const edge of state.graph.edges) {
