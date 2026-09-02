@@ -928,12 +928,48 @@ el.importBtn.addEventListener('click', () => {
   el.importFileInput.click();
 });
 
+// Imports a folder bundle exported by exportFolderFlow(): creates a new folder
+// (even if a folder with the same name already exists, to avoid silently merging
+// into it) and every ticket + graph inside it.
+async function importFolderBundle(data) {
+  const folderName = (data.folder && data.folder.name && data.folder.name.trim()) || 'Cartella importata';
+  const folder = await api('/api/folders', { method: 'POST', body: JSON.stringify({ name: folderName }) });
+  let importedCount = 0;
+  for (const entry of data.tickets) {
+    const t = (entry && entry.ticket) || {};
+    const title = (t.title || '').trim();
+    if (!title) continue;
+    const created = await api('/api/tickets', {
+      method: 'POST',
+      body: JSON.stringify({ title, description: t.description || '', folderId: folder.id }),
+    });
+    if (t.status === 'done') {
+      await api(`/api/tickets/${created.id}`, { method: 'PUT', body: JSON.stringify({ status: 'done' }) });
+    }
+    const g = (entry && entry.graph) || {};
+    const nodes = Array.isArray(g.nodes) ? g.nodes : [];
+    const edges = Array.isArray(g.edges) ? g.edges : [];
+    if (nodes.length > 0 || edges.length > 0) {
+      await api(`/api/tickets/${created.id}/graph`, { method: 'PUT', body: JSON.stringify({ nodes, edges }) });
+    }
+    importedCount++;
+  }
+  await loadAll();
+  showToast(`Cartella "${folderName}" importata (${importedCount} ticket).`, 'success');
+}
+
 el.importFileInput.addEventListener('change', async () => {
   const file = el.importFileInput.files && el.importFileInput.files[0];
   if (!file) return;
   try {
     const text = await file.text();
     const data = JSON.parse(text);
+
+    if (data.type === 'folder' && Array.isArray(data.tickets)) {
+      await importFolderBundle(data);
+      return;
+    }
+
     const importedTicket = data.ticket || data; // tolerate a bare {title, description, ...} file too
     const title = (importedTicket.title || '').trim();
     if (!title) throw new Error('missing title');
