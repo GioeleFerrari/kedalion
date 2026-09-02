@@ -60,11 +60,13 @@ const el = {
 
   ticketFormPopover: document.getElementById('ticket-form-popover'),
   ticketFormHeaderIcon: document.getElementById('ticket-form-header-icon'),
+  ticketFormHeaderTitle: document.getElementById('ticket-form-header-title'),
   ticketFormClose: document.getElementById('ticket-form-close'),
   ticketForm: document.getElementById('ticket-form'),
   ticketFormTitle: document.getElementById('ticket-form-title'),
   ticketFormDesc: document.getElementById('ticket-form-desc'),
   ticketFormFolder: document.getElementById('ticket-form-folder'),
+  ticketFormSubmit: document.getElementById('ticket-form-submit'),
   ticketFormCancel: document.getElementById('ticket-form-cancel'),
 
   folderFormPopover: document.getElementById('folder-form-popover'),
@@ -668,21 +670,19 @@ function renderTicketItem(t) {
     if (e.target.closest('.delete-ticket')) return;
     selectTicket(t.id);
   });
-  item.querySelector('.delete-ticket').addEventListener('click', async (e) => {
+  item.querySelector('.delete-ticket').addEventListener('click', (e) => {
     e.stopPropagation();
-    const ok = await askConfirm({
-      title: 'Eliminare il ticket?',
-      message: `"${t.title}" e tutto il suo grafo verranno eliminati. L'operazione non è reversibile.`,
-      confirmLabel: 'Elimina ticket',
-    });
-    if (!ok) return;
-    await api(`/api/tickets/${t.id}`, { method: 'DELETE' });
-    if (state.currentTicketId === t.id) {
-      state.currentTicketId = null;
-      showEmptyState();
-    }
-    await loadAll();
-    showToast(`Ticket "${t.title}" eliminato.`, 'success');
+    deleteTicketFlow(t);
+  });
+  item.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    showContextMenu(e.clientX, e.clientY, [
+      { label: 'Rinomina', icon: 'pencil', action: () => openRenameTicketForm(t, e.clientX, e.clientY) },
+      { label: 'Esporta', icon: 'download', action: () => exportTicketFlow(t) },
+      'separator',
+      { label: 'Elimina', icon: 'trash', danger: true, action: () => deleteTicketFlow(t) },
+    ]);
   });
   return item;
 }
@@ -771,11 +771,30 @@ el.searchInput.addEventListener('input', () => {
   }, 250);
 });
 
+let ticketFormEditId = null; // null while creating a new ticket, otherwise the id being renamed
+
 el.newTicketBtn.addEventListener('click', () => {
+  ticketFormEditId = null;
+  el.ticketFormHeaderTitle.textContent = 'Nuovo ticket';
+  el.ticketFormSubmit.textContent = 'Crea ticket';
+  el.ticketFormTitle.value = '';
+  el.ticketFormDesc.value = '';
+  el.ticketFormFolder.value = '';
   resetMarkdownTabs('ticket-form');
   const btnRect = el.newTicketBtn.getBoundingClientRect();
   openFormPopover(el.ticketFormPopover, btnRect.right + 8, btnRect.top, () => el.ticketFormTitle.focus());
 });
+
+function openRenameTicketForm(ticket, clientX, clientY) {
+  ticketFormEditId = ticket.id;
+  el.ticketFormHeaderTitle.textContent = 'Rinomina ticket';
+  el.ticketFormSubmit.textContent = 'Salva';
+  el.ticketFormTitle.value = ticket.title;
+  el.ticketFormDesc.value = ticket.description || '';
+  el.ticketFormFolder.value = ticket.folderId || '';
+  resetMarkdownTabs('ticket-form');
+  openFormPopover(el.ticketFormPopover, clientX, clientY, () => el.ticketFormTitle.select());
+}
 
 el.ticketFormCancel.addEventListener('click', () => closeFormPopover(el.ticketFormPopover, el.ticketForm));
 el.ticketFormClose.addEventListener('click', () => closeFormPopover(el.ticketFormPopover, el.ticketForm));
@@ -786,18 +805,44 @@ el.ticketForm.addEventListener('submit', async (e) => {
   if (!title) return;
   const description = el.ticketFormDesc.value.trim();
   const folderId = el.ticketFormFolder.value || undefined;
+  const editId = ticketFormEditId;
   closeFormPopover(el.ticketFormPopover, el.ticketForm);
   try {
-    const ticket = await api('/api/tickets', {
-      method: 'POST',
-      body: JSON.stringify({ title, description, folderId }),
-    });
-    await loadAll();
-    selectTicket(ticket.id);
+    if (editId) {
+      await api(`/api/tickets/${editId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ title, description, folderId: folderId || null }),
+      });
+      await loadAll();
+      if (state.currentTicketId === editId) selectTicket(editId);
+    } else {
+      const ticket = await api('/api/tickets', {
+        method: 'POST',
+        body: JSON.stringify({ title, description, folderId }),
+      });
+      await loadAll();
+      selectTicket(ticket.id);
+    }
   } catch (err) {
-    showToast('Creazione del ticket non riuscita: riprova.', 'error');
+    showToast(editId ? 'Rinomina del ticket non riuscita: riprova.' : 'Creazione del ticket non riuscita: riprova.', 'error');
   }
 });
+
+async function deleteTicketFlow(ticket) {
+  const ok = await askConfirm({
+    title: 'Eliminare il ticket?',
+    message: `"${ticket.title}" e tutto il suo grafo verranno eliminati. L'operazione non è reversibile.`,
+    confirmLabel: 'Elimina ticket',
+  });
+  if (!ok) return;
+  await api(`/api/tickets/${ticket.id}`, { method: 'DELETE' });
+  if (state.currentTicketId === ticket.id) {
+    state.currentTicketId = null;
+    showEmptyState();
+  }
+  await loadAll();
+  showToast(`Ticket "${ticket.title}" eliminato.`, 'success');
+}
 
 let folderFormEditId = null; // null while creating a new folder, otherwise the id being renamed
 
@@ -896,31 +941,40 @@ function slugifyFilename(title) {
   return (slug || 'ticket') + '.kn';
 }
 
+// Exports a single ticket as a .kn file. Reads the graph via the API rather than
+// state.graph so this works for any ticket, not just the one currently open.
+async function exportTicketFlow(ticket) {
+  try {
+    const graph =
+      ticket.id === state.currentTicketId ? state.graph : await api(`/api/tickets/${ticket.id}/graph`);
+    const payload = {
+      kedalionExport: 1,
+      ticket: {
+        title: ticket.title,
+        description: ticket.description || '',
+        status: ticket.status || 'open',
+      },
+      graph: { nodes: graph.nodes, edges: graph.edges },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = slugifyFilename(ticket.title);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('Ticket esportato.', 'success');
+  } catch (err) {
+    showToast('Esportazione del ticket non riuscita: riprova.', 'error');
+  }
+}
+
 el.exportTicketBtn.addEventListener('click', () => {
   const ticket = state.tickets.find((t) => t.id === state.currentTicketId);
   if (!ticket) return;
-  const payload = {
-    kedalionExport: 1,
-    ticket: {
-      title: ticket.title,
-      description: ticket.description || '',
-      status: ticket.status || 'open',
-    },
-    graph: {
-      nodes: state.graph.nodes,
-      edges: state.graph.edges,
-    },
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = slugifyFilename(ticket.title);
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  showToast('Ticket esportato.', 'success');
+  exportTicketFlow(ticket);
 });
 
 el.importBtn.addEventListener('click', () => {
