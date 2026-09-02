@@ -31,6 +31,10 @@ const el = {
   endNodeBtn: document.getElementById('end-node-btn'),
   linkModeBtn: document.getElementById('link-mode-btn'),
   centerViewBtn: document.getElementById('center-view-btn'),
+  autoLayoutBtn: document.getElementById('auto-layout-btn'),
+  undoBtn: document.getElementById('undo-btn'),
+  redoBtn: document.getElementById('redo-btn'),
+  saveStatus: document.getElementById('save-status'),
   deleteSelectionBtn: document.getElementById('delete-selection-btn'),
   linkHint: document.getElementById('link-hint'),
   contextMenu: document.getElementById('context-menu'),
@@ -181,6 +185,81 @@ function centerGraphView() {
   state.pan = { x: rect.width / 2 - centerX, y: rect.height / 2 - centerY };
 }
 
+// Rearranges nodes into clean left-to-right levels (a simple layered/Sugiyama-style
+// layout): each node's level is the longest path from a root (the Start node if
+// present, otherwise any node with no incoming edge), nodes in the same level are
+// stacked vertically in their current top-to-bottom order, and any node the graph
+// walk never reaches (disconnected fragments) is placed in one extra level after
+// the rest so nothing is lost or overlapped.
+function autoLayoutGraph() {
+  const nodes = state.graph.nodes;
+  if (nodes.length === 0) return;
+  const edges = state.graph.edges;
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const outgoing = new Map(nodes.map((n) => [n.id, []]));
+  const incomingCount = new Map(nodes.map((n) => [n.id, 0]));
+  for (const e of edges) {
+    if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) continue;
+    outgoing.get(e.from).push(e.to);
+    incomingCount.set(e.to, incomingCount.get(e.to) + 1);
+  }
+
+  const startNode = nodes.find((n) => n.nodeType === 'start');
+  const roots = [];
+  if (startNode) roots.push(startNode.id);
+  for (const n of nodes) {
+    if (n.id !== (startNode && startNode.id) && incomingCount.get(n.id) === 0) roots.push(n.id);
+  }
+
+  // Longest-path level assignment via relaxation (safe against cycles: a node is
+  // only re-queued when a strictly longer path to it is found, so it terminates).
+  const levels = new Map(roots.map((id) => [id, 0]));
+  const queue = [...roots];
+  let guard = 0;
+  while (queue.length > 0 && guard < nodes.length * nodes.length + nodes.length) {
+    guard++;
+    const id = queue.shift();
+    const lvl = levels.get(id);
+    for (const toId of outgoing.get(id) || []) {
+      const candidate = lvl + 1;
+      if (!levels.has(toId) || levels.get(toId) < candidate) {
+        levels.set(toId, candidate);
+        queue.push(toId);
+      }
+    }
+  }
+  const maxAssignedLevel = Math.max(0, ...levels.values());
+  for (const n of nodes) {
+    if (!levels.has(n.id)) levels.set(n.id, maxAssignedLevel + 1); // unreached: own trailing level
+  }
+
+  const byLevel = new Map();
+  for (const n of nodes) {
+    const lvl = levels.get(n.id);
+    if (!byLevel.has(lvl)) byLevel.set(lvl, []);
+    byLevel.get(lvl).push(n);
+  }
+
+  const H_GAP = NODE_WIDTH + 90;
+  const V_GAP = NODE_HEIGHT + 40;
+  for (const [lvl, group] of byLevel) {
+    group.sort((a, b) => a.y - b.y);
+    const totalHeight = (group.length - 1) * V_GAP;
+    group.forEach((n, i) => {
+      n.x = lvl * H_GAP;
+      n.y = i * V_GAP - totalHeight / 2;
+    });
+  }
+}
+
+el.autoLayoutBtn.addEventListener('click', () => {
+  pushUndo();
+  autoLayoutGraph();
+  centerGraphView();
+  renderGraph();
+  saveGraph();
+});
+
 // Cheap panning update: just move the existing group instead of rebuilding the
 // whole graph (nodes/edges/listeners) on every wheel tick or pan-drag frame.
 function applyPanTransform() {
@@ -201,6 +280,8 @@ el.searchBtn.innerHTML = svgIcon('search', 16);
 el.newFolderBtn.innerHTML = svgIcon('folderPlus', 16);
 el.importBtn.innerHTML = svgIcon('upload', 16);
 el.nodeViewEdit.innerHTML = svgIcon('pencil', 13);
+el.undoBtn.innerHTML = svgIcon('undo', 15);
+el.redoBtn.innerHTML = svgIcon('redo', 15);
 el.nodeViewClose.innerHTML = svgIcon('x', 13);
 el.nodeViewHeaderIcon.innerHTML = svgIcon('info', 14);
 el.nodeFormHeaderIcon.innerHTML = svgIcon('pencil', 14);
@@ -573,6 +654,9 @@ async function selectTicket(id) {
   marqueeState = null;
   suppressNextClick = false;
   suppressNextCanvasClick = false;
+  resetUndoHistory();
+  clearTimeout(saveStatusTimer);
+  el.saveStatus.hidden = true;
 
   const ticket = state.tickets.find((t) => t.id === id) || (await api(`/api/tickets/${id}`));
   el.ticketTitle.textContent = ticket.title;
@@ -796,6 +880,7 @@ function addNodeAt(x, y, clientX, clientY) {
     clientY,
     initial: { label: '', description: '' },
     onSubmit: ({ label, description }) => {
+      pushUndo();
       const node = { id: genId(), label, description, done: false, x, y };
       state.graph.nodes.push(node);
       renderGraph();
@@ -812,6 +897,7 @@ function addConnectedNode(sourceNode, clientX, clientY) {
     clientY,
     initial: { label: '', description: '' },
     onSubmit: ({ label, description }) => {
+      pushUndo();
       const newNode = { id: genId(), label, description, done: false, x, y };
       state.graph.nodes.push(newNode);
       state.graph.edges.push({ id: genId(), from: sourceNode.id, to: newNode.id });
@@ -828,6 +914,7 @@ function editNode(node, clientX, clientY) {
     initial: { label: node.label, description: node.description || '' },
     lockTitle: !!node.nodeType,
     onSubmit: ({ label, description }) => {
+      pushUndo();
       if (!node.nodeType) node.label = label;
       node.description = description;
       renderGraph();
@@ -967,16 +1054,102 @@ function updateLinkModeUI() {
   el.linkHint.hidden = state.mode !== 'link';
 }
 
+let saveStatusTimer = null;
+
+function setSaveStatus(kind) {
+  clearTimeout(saveStatusTimer);
+  el.saveStatus.hidden = false;
+  el.saveStatus.className = 'save-status ' + kind;
+  el.saveStatus.textContent =
+    kind === 'saving' ? 'Salvataggio…' : kind === 'error' ? 'Salvataggio non riuscito' : 'Salvato';
+  if (kind === 'saved') {
+    saveStatusTimer = setTimeout(() => {
+      el.saveStatus.hidden = true;
+    }, 2000);
+  }
+}
+
 async function saveGraph() {
+  setSaveStatus('saving');
   try {
     await api(`/api/tickets/${state.currentTicketId}/graph`, {
       method: 'PUT',
       body: JSON.stringify(state.graph),
     });
+    setSaveStatus('saved');
   } catch (err) {
+    setSaveStatus('error');
     showToast('Salvataggio non riuscito: controlla la connessione e riprova.', 'error');
   }
 }
+
+// --- Undo / redo ---
+// A snapshot is pushed onto undoStack right before each graph-mutating action
+// (never after), so undo always restores the state as it was just before that
+// action ran. Redo is cleared on any new action, matching standard editor behavior.
+
+let undoStack = [];
+let redoStack = [];
+const MAX_UNDO_STACK = 60;
+let undoRedoInProgress = false;
+
+function snapshotGraph() {
+  return {
+    nodes: JSON.parse(JSON.stringify(state.graph.nodes)),
+    edges: JSON.parse(JSON.stringify(state.graph.edges)),
+  };
+}
+
+function updateUndoRedoUI() {
+  el.undoBtn.disabled = undoStack.length === 0;
+  el.redoBtn.disabled = redoStack.length === 0;
+}
+
+function pushUndo() {
+  if (undoRedoInProgress) return;
+  undoStack.push(snapshotGraph());
+  if (undoStack.length > MAX_UNDO_STACK) undoStack.shift();
+  redoStack.length = 0;
+  updateUndoRedoUI();
+}
+
+function resetUndoHistory() {
+  undoStack = [];
+  redoStack = [];
+  updateUndoRedoUI();
+}
+
+function applyGraphSnapshot(snapshot) {
+  undoRedoInProgress = true;
+  state.graph.nodes = snapshot.nodes;
+  state.graph.edges = snapshot.edges;
+  state.selected = null;
+  state.multiSelected.clear();
+  renderGraph();
+  saveGraph();
+  undoRedoInProgress = false;
+}
+
+function doUndo() {
+  if (undoStack.length === 0) return;
+  const current = snapshotGraph();
+  const prev = undoStack.pop();
+  redoStack.push(current);
+  applyGraphSnapshot(prev);
+  updateUndoRedoUI();
+}
+
+function doRedo() {
+  if (redoStack.length === 0) return;
+  const current = snapshotGraph();
+  const next = redoStack.pop();
+  undoStack.push(current);
+  applyGraphSnapshot(next);
+  updateUndoRedoUI();
+}
+
+el.undoBtn.addEventListener('click', doUndo);
+el.redoBtn.addEventListener('click', doRedo);
 
 el.addNodeBtn.addEventListener('click', () => {
   const center = viewCenterGraphPoint();
@@ -1032,6 +1205,7 @@ function addSpecialNode(nodeType) {
     x,
     y,
   };
+  pushUndo();
   state.graph.nodes.push(node);
   state.selected = { type: 'node', id: node.id };
   renderGraph();
@@ -1052,6 +1226,7 @@ el.deleteSelectionBtn.addEventListener('click', async () => {
       });
       if (!ok) return;
     }
+    pushUndo();
     for (const id of state.multiSelected) removeNode(id);
     state.multiSelected.clear();
     renderGraph();
@@ -1059,6 +1234,7 @@ el.deleteSelectionBtn.addEventListener('click', async () => {
     return;
   }
   if (!state.selected) return;
+  pushUndo();
   if (state.selected.type === 'node') removeNode(state.selected.id);
   else removeEdge(state.selected.id);
   state.selected = null;
@@ -1098,6 +1274,13 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key.toLowerCase() === 'b' && (e.ctrlKey || e.metaKey) && !isTypingInField() && !el.appRoot.hidden) {
     e.preventDefault();
     setSidebarCollapsed(!el.sidebar.classList.contains('collapsed'));
+  } else if (e.key.toLowerCase() === 'z' && (e.ctrlKey || e.metaKey) && !isTypingInField() && !el.ticketView.hidden) {
+    e.preventDefault();
+    if (e.shiftKey) doRedo();
+    else doUndo();
+  } else if (e.key.toLowerCase() === 'y' && (e.ctrlKey || e.metaKey) && !isTypingInField() && !el.ticketView.hidden) {
+    e.preventDefault();
+    doRedo();
   }
 });
 
@@ -1200,6 +1383,7 @@ function onNodeContextMenu(node, e) {
       label: node.done ? 'Segna come da fare' : 'Segna come completato',
       icon: 'check',
       action: () => {
+        pushUndo();
         toggleDone(node.id);
         renderGraph();
         saveGraph();
@@ -1211,6 +1395,7 @@ function onNodeContextMenu(node, e) {
       icon: 'trash',
       danger: true,
       action: () => {
+        pushUndo();
         removeNode(node.id);
         state.selected = null;
         renderGraph();
@@ -1232,6 +1417,7 @@ function onEdgeContextMenu(edge, e) {
       icon: 'trash',
       danger: true,
       action: () => {
+        pushUndo();
         removeEdge(edge.id);
         state.selected = null;
         renderGraph();
@@ -1264,6 +1450,7 @@ function onNodeClick(node) {
         (edge) => edge.from === state.linkFirst && edge.to === node.id
       );
       if (!exists) {
+        pushUndo();
         state.graph.edges.push({ id: genId(), from: state.linkFirst, to: node.id });
         saveGraph();
       }
@@ -1488,7 +1675,10 @@ el.svg.addEventListener('mousemove', (e) => {
         guideY = snap.guideY;
       }
     }
-    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) groupDragState.moved = true;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+      if (!groupDragState.moved) pushUndo();
+      groupDragState.moved = true;
+    }
     for (const [id, start] of groupDragState.starts) {
       const n = state.graph.nodes.find((gn) => gn.id === id);
       if (n) {
@@ -1519,7 +1709,10 @@ el.svg.addEventListener('mousemove', (e) => {
     guideX = snap.guideX;
     guideY = snap.guideY;
   }
-  if (Math.abs(newX - node.x) > 2 || Math.abs(newY - node.y) > 2) dragState.moved = true;
+  if (Math.abs(newX - node.x) > 2 || Math.abs(newY - node.y) > 2) {
+    if (!dragState.moved) pushUndo();
+    dragState.moved = true;
+  }
   node.x = newX;
   node.y = newY;
   renderGraph();
