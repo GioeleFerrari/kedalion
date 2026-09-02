@@ -95,6 +95,16 @@ app.put('/api/folders/reorder', (req, res) => {
   res.json(store.listFolders(req.session.userId));
 });
 
+app.put('/api/folders/:id', (req, res) => {
+  const { name } = req.body || {};
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'name is required' });
+  }
+  const folder = store.updateFolder(req.session.userId, req.params.id, { name: name.trim() });
+  if (!folder) return res.status(404).json({ error: 'not found' });
+  res.json(folder);
+});
+
 app.delete('/api/folders/:id', (req, res) => {
   store.deleteFolder(req.session.userId, req.params.id);
   res.status(204).end();

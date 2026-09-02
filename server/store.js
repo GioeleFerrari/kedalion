@@ -223,6 +223,13 @@ function createFolder(userId, { name }) {
   return folderRowToJson({ id, name, created_at: now });
 }
 
+function updateFolder(userId, id, { name }) {
+  if (!isValidId(id)) return null;
+  db.prepare('UPDATE folders SET name = ? WHERE id = ? AND user_id = ?').run(name, id, userId);
+  const row = db.prepare('SELECT * FROM folders WHERE id = ? AND user_id = ?').get(id, userId);
+  return row ? folderRowToJson(row) : null;
+}
+
 // Applies a new manual order to the user's folders: orderIds is the full list of
 // folder ids in the desired order, so each one's sort_order becomes its index.
 // Ids that aren't valid or don't belong to this user are silently skipped.
@@ -260,6 +267,7 @@ module.exports = {
   searchTicketIdsByNodeContent,
   listFolders,
   createFolder,
+  updateFolder,
   reorderFolders,
   deleteFolder,
 };

@@ -69,9 +69,11 @@ const el = {
 
   folderFormPopover: document.getElementById('folder-form-popover'),
   folderFormHeaderIcon: document.getElementById('folder-form-header-icon'),
+  folderFormHeaderTitle: document.getElementById('folder-form-header-title'),
   folderFormClose: document.getElementById('folder-form-close'),
   folderForm: document.getElementById('folder-form'),
   folderFormName: document.getElementById('folder-form-name'),
+  folderFormSubmit: document.getElementById('folder-form-submit'),
   folderFormCancel: document.getElementById('folder-form-cancel'),
 
   loginScreen: document.getElementById('login-screen'),
@@ -612,17 +614,19 @@ function renderFolderGroup(folder, tickets) {
   });
 
   if (folder) {
-    header.querySelector('.folder-delete').addEventListener('click', async (e) => {
+    header.querySelector('.folder-delete').addEventListener('click', (e) => {
       e.stopPropagation();
-      const ok = await askConfirm({
-        title: 'Eliminare la cartella?',
-        message: `"${folder.name}" verrà eliminata. I ticket al suo interno non verranno eliminati, solo spostati fuori dalla cartella.`,
-        confirmLabel: 'Elimina cartella',
-      });
-      if (!ok) return;
-      await api(`/api/folders/${folder.id}`, { method: 'DELETE' });
-      await loadAll();
-      showToast(`Cartella "${folder.name}" eliminata.`, 'success');
+      deleteFolderFlow(folder);
+    });
+    header.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showContextMenu(e.clientX, e.clientY, [
+        { label: 'Rinomina', icon: 'pencil', action: () => openRenameFolderForm(folder, e.clientX, e.clientY) },
+        { label: 'Esporta', icon: 'download', action: () => exportFolderFlow(folder) },
+        'separator',
+        { label: 'Elimina', icon: 'trash', danger: true, action: () => deleteFolderFlow(folder) },
+      ]);
     });
   }
 
@@ -795,10 +799,24 @@ el.ticketForm.addEventListener('submit', async (e) => {
   }
 });
 
+let folderFormEditId = null; // null while creating a new folder, otherwise the id being renamed
+
 el.newFolderBtn.addEventListener('click', () => {
+  folderFormEditId = null;
+  el.folderFormHeaderTitle.textContent = 'Nuova cartella';
+  el.folderFormSubmit.textContent = 'Crea cartella';
+  el.folderFormName.value = '';
   const btnRect = el.newFolderBtn.getBoundingClientRect();
   openFormPopover(el.folderFormPopover, btnRect.right + 8, btnRect.top, () => el.folderFormName.focus());
 });
+
+function openRenameFolderForm(folder, clientX, clientY) {
+  folderFormEditId = folder.id;
+  el.folderFormHeaderTitle.textContent = 'Rinomina cartella';
+  el.folderFormSubmit.textContent = 'Salva';
+  el.folderFormName.value = folder.name;
+  openFormPopover(el.folderFormPopover, clientX, clientY, () => el.folderFormName.select());
+}
 
 el.folderFormCancel.addEventListener('click', () => closeFormPopover(el.folderFormPopover, el.folderForm));
 el.folderFormClose.addEventListener('click', () => closeFormPopover(el.folderFormPopover, el.folderForm));
@@ -807,14 +825,65 @@ el.folderForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = el.folderFormName.value.trim();
   if (!name) return;
+  const editId = folderFormEditId;
   closeFormPopover(el.folderFormPopover, el.folderForm);
   try {
-    await api('/api/folders', { method: 'POST', body: JSON.stringify({ name }) });
+    if (editId) {
+      await api(`/api/folders/${editId}`, { method: 'PUT', body: JSON.stringify({ name }) });
+    } else {
+      await api('/api/folders', { method: 'POST', body: JSON.stringify({ name }) });
+    }
     await loadAll();
   } catch (err) {
-    showToast('Creazione della cartella non riuscita: riprova.', 'error');
+    showToast(editId ? 'Rinomina della cartella non riuscita: riprova.' : 'Creazione della cartella non riuscita: riprova.', 'error');
   }
 });
+
+async function deleteFolderFlow(folder) {
+  const ok = await askConfirm({
+    title: 'Eliminare la cartella?',
+    message: `"${folder.name}" verrà eliminata. I ticket al suo interno non verranno eliminati, solo spostati fuori dalla cartella.`,
+    confirmLabel: 'Elimina cartella',
+  });
+  if (!ok) return;
+  await api(`/api/folders/${folder.id}`, { method: 'DELETE' });
+  await loadAll();
+  showToast(`Cartella "${folder.name}" eliminata.`, 'success');
+}
+
+// Bundles every ticket in a folder (and its graph) into a single .kn file, so a
+// whole folder can be exported/re-imported as one unit instead of ticket by ticket.
+async function exportFolderFlow(folder) {
+  const tickets = state.tickets.filter((t) => t.folderId === folder.id);
+  if (tickets.length === 0) {
+    showToast('La cartella è vuota, niente da esportare.', 'error');
+    return;
+  }
+  try {
+    const bundle = await Promise.all(
+      tickets.map(async (t) => {
+        const graph = await api(`/api/tickets/${t.id}/graph`);
+        return {
+          ticket: { title: t.title, description: t.description || '', status: t.status || 'open' },
+          graph: { nodes: graph.nodes, edges: graph.edges },
+        };
+      })
+    );
+    const payload = { kedalionExport: 1, type: 'folder', folder: { name: folder.name }, tickets: bundle };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = slugifyFilename(folder.name);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('Cartella esportata.', 'success');
+  } catch (err) {
+    showToast('Esportazione della cartella non riuscita: riprova.', 'error');
+  }
+}
 
 // --- Ticket import / export ---
 
