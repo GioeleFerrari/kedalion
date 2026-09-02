@@ -1091,6 +1091,7 @@ function onGenericPopoverOutsideClick(e) {
   if (openPopoverEl && !openPopoverEl.contains(e.target)) {
     if (openPopoverEl === el.ticketFormPopover) closeFormPopover(el.ticketFormPopover, el.ticketForm);
     else if (openPopoverEl === el.folderFormPopover) closeFormPopover(el.folderFormPopover, el.folderForm);
+    else if (openPopoverEl === el.nodeFormPopover) closeNodeForm();
   }
 }
 
@@ -1230,23 +1231,21 @@ function openNodeForm({ clientX, clientY, initial, onSubmit, lockTitle }) {
   top = Math.max(margin, top);
   popover.style.left = `${left}px`;
   popover.style.top = `${top}px`;
+  openPopoverEl = popover;
 
   requestAnimationFrame(() => (lockTitle ? el.nodeFormDesc : el.nodeFormTitle).focus());
-  setTimeout(() => document.addEventListener('click', onNodeFormOutsideClick), 0);
-}
-
-function onNodeFormOutsideClick(e) {
-  if (!el.nodeFormPopover.contains(e.target)) closeNodeForm();
+  setTimeout(() => document.addEventListener('click', onGenericPopoverOutsideClick), 0);
 }
 
 function closeNodeForm() {
   el.nodeFormPopover.hidden = true;
+  if (openPopoverEl === el.nodeFormPopover) openPopoverEl = null;
   nodeFormState = null;
   el.nodeForm.reset();
   el.nodeFormTitle.readOnly = false;
   el.nodeFormTitle.classList.remove('locked');
   el.nodeFormTitleHint.hidden = true;
-  document.removeEventListener('click', onNodeFormOutsideClick);
+  document.removeEventListener('click', onGenericPopoverOutsideClick);
 }
 
 el.nodeForm.addEventListener('submit', (e) => {
@@ -1611,14 +1610,14 @@ document.addEventListener('keydown', (e) => {
   if (!el.cmdkOverlay.hidden) {
     return; // the palette's own input keydown handler (above) owns arrows/enter/escape while open
   }
-  if (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey)) {
-    e.preventDefault();
-    openCommandPalette();
-    return;
-  }
   if (!el.confirmOverlay.hidden) {
     if (e.key === 'Escape') closeConfirm(false);
     else if (e.key === 'Enter') closeConfirm(true);
+    return;
+  }
+  if (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey) && !isTypingInField()) {
+    e.preventDefault();
+    openCommandPalette();
     return;
   }
   if (e.key === 'Escape') {

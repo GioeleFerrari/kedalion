@@ -57,7 +57,7 @@
       </div>
 
       <div id="search-box" class="search-box" hidden>
-        <input id="search-input" type="text" placeholder="Cerca per titolo..." />
+        <input id="search-input" type="text" placeholder="Cerca ticket o testo nei passaggi..." />
       </div>
 
       <div id="ticket-tree" class="ticket-tree"></div>
@@ -110,7 +110,7 @@
 
   <div id="context-menu" class="context-menu" hidden></div>
 
-  <div id="node-view-popover" class="popover node-view-popover" hidden>
+  <div id="node-view-popover" class="popover node-view-popover" role="dialog" aria-modal="true" hidden>
     <div class="popover-header">
       <span class="popover-header-icon" id="node-view-header-icon"></span>
       <h3 id="node-view-title"></h3>
@@ -121,7 +121,7 @@
     <p id="node-view-empty" class="node-view-empty" hidden>Nessuna descrizione. Clicca la matita per aggiungerne una.</p>
   </div>
 
-  <div id="node-form-popover" class="popover" hidden>
+  <div id="node-form-popover" class="popover" role="dialog" aria-modal="true" hidden>
     <div class="popover-header">
       <span class="popover-header-icon" id="node-form-header-icon"></span>
       <h3 id="node-form-header-title">Nuovo nodo</h3>
@@ -151,7 +151,7 @@
     </form>
   </div>
 
-  <div id="ticket-form-popover" class="popover" hidden>
+  <div id="ticket-form-popover" class="popover" role="dialog" aria-modal="true" hidden>
     <div class="popover-header">
       <span class="popover-header-icon" id="ticket-form-header-icon"></span>
       <h3 id="ticket-form-header-title">Nuovo ticket</h3>
@@ -186,7 +186,7 @@
     </form>
   </div>
 
-  <div id="folder-form-popover" class="popover" hidden>
+  <div id="folder-form-popover" class="popover" role="dialog" aria-modal="true" hidden>
     <div class="popover-header">
       <span class="popover-header-icon" id="folder-form-header-icon"></span>
       <h3 id="folder-form-header-title">Nuova cartella</h3>
