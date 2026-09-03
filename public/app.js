@@ -81,6 +81,9 @@ const el = {
   loginScreen: document.getElementById('login-screen'),
   appRoot: document.getElementById('app-root'),
   loginBrandIcon: document.getElementById('login-brand-icon'),
+  loginFeatureIcon1: document.getElementById('login-feature-icon-1'),
+  loginFeatureIcon2: document.getElementById('login-feature-icon-2'),
+  loginFeatureIcon3: document.getElementById('login-feature-icon-3'),
   githubLoginBtn: document.getElementById('github-login-btn'),
   githubLoginIcon: document.getElementById('github-login-icon'),
   localLoginBtn: document.getElementById('local-login-btn'),
@@ -315,6 +318,9 @@ el.ticketFormClose.innerHTML = svgIcon('x', 13);
 el.folderFormHeaderIcon.innerHTML = svgIconSolid('folder', 14);
 el.folderFormClose.innerHTML = svgIcon('x', 13);
 el.loginBrandIcon.innerHTML = svgIcon('ticket', 26);
+el.loginFeatureIcon1.innerHTML = svgIcon('layoutGrid', 15);
+el.loginFeatureIcon2.innerHTML = svgIcon('link', 15);
+el.loginFeatureIcon3.innerHTML = svgIconSolid('folder', 15);
 el.githubLoginIcon.innerHTML = svgIconSolid('github', 18);
 el.logoutBtn.innerHTML = svgIcon('x', 13);
 el.logoutBtn.title = 'Esci';

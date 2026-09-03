@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="utf-8" />
-<title>Kêdalíôn</title>
+<title>Kedalion</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg" />
 <script>
   // Applied before first paint to avoid a flash of the wrong theme.
@@ -22,18 +22,32 @@
 </head>
 <body>
   <div id="login-screen" class="login-screen" hidden>
-    <div class="login-card">
-      <span class="brand-mark login-brand-mark" id="login-brand-icon"></span>
-      <h1>Kedalion</h1>
-      <p>Organizza i tuoi ticket e i passaggi per risolverli, come grafo.</p>
-      <a id="github-login-btn" class="github-btn" href="/auth/github">
-        <span id="github-login-icon"></span>
-        Accedi con GitHub
-      </a>
-      <button id="local-login-btn" class="link-btn">Continua senza account (dati salvati solo su questo computer)</button>
-      <p id="login-config-hint" class="login-config-hint" hidden>
-        Login con GitHub non ancora configurato su questo server: vedi il README per abilitarlo.
-      </p>
+    <div class="login-brand-panel">
+      <div class="login-brand-content">
+        <span class="brand-mark login-panel-mark" id="login-brand-icon"></span>
+        <h1>Kedalion</h1>
+        <p class="login-tagline">La guida strutturata per risolvere i tuoi ticket, passo dopo passo.</p>
+        <ul class="login-features">
+          <li><span class="login-feature-icon" id="login-feature-icon-1"></span>Organizza ogni ticket come un grafo di passaggi</li>
+          <li><span class="login-feature-icon" id="login-feature-icon-2"></span>Collega, riordina e documenta ogni fase della risoluzione</li>
+          <li><span class="login-feature-icon" id="login-feature-icon-3"></span>Raggruppa i ticket in cartelle e ritrovali subito</li>
+        </ul>
+      </div>
+    </div>
+    <div class="login-form-panel">
+      <div class="login-card">
+        <h2>Accedi</h2>
+        <p>Accedi con GitHub per salvare i tuoi ticket nel cloud, oppure continua in locale su questo computer.</p>
+        <a id="github-login-btn" class="github-btn" href="/auth/github">
+          <span id="github-login-icon"></span>
+          Accedi con GitHub
+        </a>
+        <div class="login-divider"><span>oppure</span></div>
+        <button id="local-login-btn" class="link-btn">Continua senza account (dati salvati solo su questo computer)</button>
+        <p id="login-config-hint" class="login-config-hint" hidden>
+          Login con GitHub non ancora configurato su questo server: vedi il README per abilitarlo.
+        </p>
+      </div>
     </div>
   </div>
 
