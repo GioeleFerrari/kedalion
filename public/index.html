@@ -65,13 +65,19 @@
       <div class="sidebar-toolbar">
         <button id="new-ticket-btn" class="icon-btn" title="Nuovo ticket" aria-label="Nuovo ticket"></button>
         <button id="search-btn" class="icon-btn" title="Cerca ticket" aria-label="Cerca ticket"></button>
+        <button id="tags-btn" class="icon-btn" title="Filtra per tag" aria-label="Filtra per tag"></button>
         <button id="new-folder-btn" class="icon-btn" title="Nuova cartella" aria-label="Nuova cartella"></button>
         <button id="import-btn" class="icon-btn" title="Importa ticket" aria-label="Importa ticket"></button>
         <input id="import-file-input" type="file" accept=".kn,.json,application/json" hidden />
       </div>
 
       <div id="search-box" class="search-box" hidden>
-        <input id="search-input" type="text" placeholder="Cerca ticket o testo nei passaggi..." />
+        <input id="search-input" type="text" placeholder="Cerca ticket, testo nei passaggi o tag..." />
+      </div>
+
+      <div id="tag-filter-box" class="tag-filter-box" hidden>
+        <div id="tag-filter-list" class="tag-filter-list"></div>
+        <p id="tag-filter-empty" class="tag-filter-empty" hidden>Nessun tag ancora: aggiungine uno da un ticket.</p>
       </div>
 
       <div id="ticket-tree" class="ticket-tree"></div>
@@ -97,12 +103,13 @@
         <header class="ticket-header">
           <div class="ticket-title-row">
             <h2 id="ticket-title"></h2>
+            <button type="button" id="ticket-edit-btn" class="icon-btn-sm" title="Modifica ticket"></button>
           </div>
           <div id="ticket-desc" class="ticket-desc markdown-body"></div>
+          <p id="ticket-desc-empty" class="ticket-desc-empty" hidden>Nessuna descrizione. Clicca la matita per aggiungerne una.</p>
+          <div id="ticket-tags" class="ticket-header-tags" hidden></div>
           <div class="toolbar">
-            <button id="add-node-btn" class="btn" title="Aggiungi un nuovo passaggio al grafo"><span class="btn-icon" data-icon="plus"></span>Nodo</button>
-            <button id="start-node-btn" class="btn" title="Aggiungi (o vai al) nodo di inizio"><span class="btn-icon" data-icon="play"></span>Inizio</button>
-            <button id="end-node-btn" class="btn" title="Aggiungi (o vai al) nodo di fine"><span class="btn-icon" data-icon="flag"></span>Fine</button>
+            <button id="add-node-menu-btn" class="btn" title="Aggiungi un nodo al grafo"><span class="btn-icon" data-icon="plus"></span>Aggiungi nodo<span class="btn-icon btn-icon-chevron" data-icon="chevronDown"></span></button>
             <button id="link-mode-btn" class="btn" title="Clicca due nodi in sequenza per collegarli"><span class="btn-icon" data-icon="link"></span>Collega nodi</button>
             <span class="toolbar-sep"></span>
             <button id="undo-btn" class="icon-btn" title="Annulla (Ctrl+Z)" disabled></button>
@@ -117,7 +124,7 @@
             <span id="link-hint" class="hint" hidden>Clicca due nodi per collegarli (Esc per annullare)</span>
           </div>
         </header>
-        <svg id="graph-svg" title="Scorri o trascina con il tasto centrale per muovere la vista. Trascina un nodo con Ctrl per allinearlo alla griglia. Trascina un'area vuota per selezionare più nodi."></svg>
+        <svg id="graph-svg" title="Scorri o trascina con il tasto centrale per muovere la vista. Tieni premuto Ctrl mentre trascini un nodo per allinearlo agli altri nodi. Trascina un'area vuota per selezionare più nodi."></svg>
       </div>
     </main>
   </div>
@@ -155,6 +162,10 @@
             <button type="button" class="md-tab" data-mode="preview">Anteprima</button>
           </div>
         </div>
+        <div class="md-format-toolbar" data-target="node-form">
+          <button type="button" class="md-format-btn" data-marker="**" title="Grassetto (Ctrl+B)"><span data-icon="bold"></span></button>
+          <button type="button" class="md-format-btn" data-marker="`" title="Codice (Ctrl+E)"><span data-icon="code"></span></button>
+        </div>
         <textarea id="node-form-desc" title="Ctrl+B grassetto, Ctrl+E codice" rows="4" maxlength="1000" placeholder="Supporta Markdown: **grassetto**, *corsivo*, elenchi, `codice`, [link](url)..."></textarea>
         <div id="node-form-desc-preview" class="markdown-body md-preview" hidden></div>
       </div>
@@ -184,8 +195,18 @@
             <button type="button" class="md-tab" data-mode="preview">Anteprima</button>
           </div>
         </div>
+        <div class="md-format-toolbar" data-target="ticket-form">
+          <button type="button" class="md-format-btn" data-marker="**" title="Grassetto (Ctrl+B)"><span data-icon="bold"></span></button>
+          <button type="button" class="md-format-btn" data-marker="`" title="Codice (Ctrl+E)"><span data-icon="code"></span></button>
+        </div>
         <textarea id="ticket-form-desc" title="Ctrl+B grassetto, Ctrl+E codice" rows="3" maxlength="1000" placeholder="Supporta Markdown: **grassetto**, *corsivo*, elenchi, `codice`..."></textarea>
         <div id="ticket-form-desc-preview" class="markdown-body md-preview" hidden></div>
+      </div>
+      <div class="field-group">
+        <span class="field-group-label">Tag</span>
+        <div id="ticket-form-tags" class="tag-input">
+          <input id="ticket-form-tags-input" type="text" maxlength="24" placeholder="Aggiungi un tag e premi Invio..." />
+        </div>
       </div>
       <label>
         Cartella
@@ -196,6 +217,24 @@
       <div class="popover-actions">
         <button type="button" id="ticket-form-cancel" class="btn-secondary">Annulla</button>
         <button type="submit" id="ticket-form-submit" class="btn-primary">Crea ticket</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="edge-label-popover" class="popover" role="dialog" aria-modal="true" hidden>
+    <div class="popover-header">
+      <span class="popover-header-icon" id="edge-label-header-icon"></span>
+      <h3>Etichetta collegamento</h3>
+      <button type="button" id="edge-label-close" class="icon-btn-sm" title="Chiudi"></button>
+    </div>
+    <form id="edge-label-form">
+      <label>
+        Testo (es. Sì / No)
+        <input id="edge-label-input" type="text" maxlength="24" placeholder="Sì" />
+      </label>
+      <div class="popover-actions">
+        <button type="button" id="edge-label-cancel" class="btn-secondary">Annulla</button>
+        <button type="submit" class="btn-primary">Salva</button>
       </div>
     </form>
   </div>
@@ -229,7 +268,10 @@
     </div>
   </div>
 
-  <div id="toast" class="toast" hidden></div>
+  <div id="toast" class="toast" hidden>
+    <span id="toast-icon" class="toast-icon"></span>
+    <span id="toast-message" class="toast-message"></span>
+  </div>
 
   <div id="confirm-overlay" class="confirm-overlay" hidden>
     <div class="confirm-dialog" role="alertdialog" aria-modal="true">

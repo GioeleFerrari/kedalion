@@ -34,6 +34,7 @@ db.exec(`
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'open',
+    tags TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
@@ -57,6 +58,13 @@ if (!folderColumns.includes('sort_order')) {
   const rows = db.prepare('SELECT id FROM folders ORDER BY name COLLATE NOCASE').all();
   const setOrder = db.prepare('UPDATE folders SET sort_order = ? WHERE id = ?');
   rows.forEach((row, i) => setOrder.run(i, row.id));
+}
+
+// Older databases were created before tickets had tags; add the column so
+// existing tickets simply start out with no tags instead of failing to load.
+const ticketColumns = db.prepare('PRAGMA table_info(tickets)').all().map((c) => c.name);
+if (!ticketColumns.includes('tags')) {
+  db.exec("ALTER TABLE tickets ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'");
 }
 
 // --- One-off migration from the old per-file JSON storage (data/tickets, data/folders, data/graphs) ---

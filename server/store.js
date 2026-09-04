@@ -51,6 +51,37 @@ function toUserJson(user) {
 
 // --- Tickets ---
 
+const MAX_TAGS_PER_TICKET = 15;
+const MAX_TAG_LENGTH = 24;
+
+// Trims, drops empties, caps length/count, and dedupes case-insensitively
+// (keeping the first casing seen) so "Bug" and "bug" don't both stick around.
+function sanitizeTags(tags) {
+  if (!Array.isArray(tags)) return [];
+  const seen = new Set();
+  const result = [];
+  for (const raw of tags) {
+    if (typeof raw !== 'string') continue;
+    const tag = raw.trim().slice(0, MAX_TAG_LENGTH);
+    if (!tag) continue;
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(tag);
+    if (result.length >= MAX_TAGS_PER_TICKET) break;
+  }
+  return result;
+}
+
+function parseTags(json) {
+  try {
+    const tags = JSON.parse(json);
+    return Array.isArray(tags) ? tags : [];
+  } catch {
+    return [];
+  }
+}
+
 function ticketRowToJson(row) {
   return {
     id: row.id,
@@ -58,6 +89,7 @@ function ticketRowToJson(row) {
     description: row.description,
     status: row.status,
     folderId: row.folder_id,
+    tags: parseTags(row.tags),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -76,7 +108,7 @@ function getTicket(userId, id) {
   return row ? ticketRowToJson(row) : null;
 }
 
-function createTicket(userId, { title, description, folderId }) {
+function createTicket(userId, { title, description, folderId, tags }) {
   const id = genId();
   const now = new Date().toISOString();
   const validFolderId =
@@ -84,8 +116,8 @@ function createTicket(userId, { title, description, folderId }) {
       ? folderId
       : null;
   db.prepare(
-    'INSERT INTO tickets (id, user_id, folder_id, title, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, userId, validFolderId, title, description || '', 'open', now, now);
+    'INSERT INTO tickets (id, user_id, folder_id, title, description, status, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, userId, validFolderId, title, description || '', 'open', JSON.stringify(sanitizeTags(tags)), now, now);
   db.prepare('INSERT INTO graphs (ticket_id, data) VALUES (?, ?)').run(
     id,
     JSON.stringify({ nodes: [], edges: [] })
@@ -119,6 +151,10 @@ function updateTicket(userId, id, updates) {
         : null;
     fields.push('folder_id = ?');
     values.push(validFolderId);
+  }
+  if (updates.tags !== undefined) {
+    fields.push('tags = ?');
+    values.push(JSON.stringify(sanitizeTags(updates.tags)));
   }
   fields.push('updated_at = ?');
   values.push(new Date().toISOString());
@@ -161,6 +197,20 @@ function saveGraph(userId, id, graph) {
   ).run(id, JSON.stringify(clean));
   db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(new Date().toISOString(), id);
   return clean;
+}
+
+// Returns every distinct tag currently used across the user's tickets, sorted
+// alphabetically — used to populate the sidebar's tag filter list.
+function listAllTags(userId) {
+  const rows = db.prepare('SELECT tags FROM tickets WHERE user_id = ?').all(userId);
+  const seen = new Map(); // lowercase -> first-seen casing
+  for (const row of rows) {
+    for (const tag of parseTags(row.tags)) {
+      const key = tag.toLowerCase();
+      if (!seen.has(key)) seen.set(key, tag);
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
 }
 
 // Returns the ids of tickets whose graph has at least one node whose label or
@@ -265,6 +315,7 @@ module.exports = {
   getGraph,
   saveGraph,
   searchTicketIdsByNodeContent,
+  listAllTags,
   listFolders,
   createFolder,
   updateFolder,

@@ -45,11 +45,11 @@ app.get('/api/tickets', (req, res) => {
 });
 
 app.post('/api/tickets', (req, res) => {
-  const { title, description, folderId } = req.body || {};
+  const { title, description, folderId, tags } = req.body || {};
   if (!title || !title.trim()) {
     return res.status(400).json({ error: 'title is required' });
   }
-  const ticket = store.createTicket(req.session.userId, { title: title.trim(), description, folderId });
+  const ticket = store.createTicket(req.session.userId, { title: title.trim(), description, folderId, tags });
   res.status(201).json(ticket);
 });
 
@@ -60,12 +60,13 @@ app.get('/api/tickets/:id', (req, res) => {
 });
 
 app.put('/api/tickets/:id', (req, res) => {
-  const { title, description, status, folderId } = req.body || {};
+  const { title, description, status, folderId, tags } = req.body || {};
   const updates = {};
   if (title !== undefined) updates.title = title;
   if (description !== undefined) updates.description = description;
   if (status !== undefined) updates.status = status;
   if (folderId !== undefined) updates.folderId = folderId;
+  if (tags !== undefined) updates.tags = tags;
   const ticket = store.updateTicket(req.session.userId, req.params.id, updates);
   if (!ticket) return res.status(404).json({ error: 'not found' });
   res.json(ticket);
@@ -108,6 +109,10 @@ app.put('/api/folders/:id', (req, res) => {
 app.delete('/api/folders/:id', (req, res) => {
   store.deleteFolder(req.session.userId, req.params.id);
   res.status(204).end();
+});
+
+app.get('/api/tags', (req, res) => {
+  res.json(store.listAllTags(req.session.userId));
 });
 
 app.get('/api/search', (req, res) => {

@@ -1,3 +1,22 @@
+const COLLAPSED_FOLDERS_STORAGE_KEY = 'kedalion-collapsed-folders';
+
+function loadCollapsedFolders() {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_FOLDERS_STORAGE_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch (e) {
+    return new Set();
+  }
+}
+
+function saveCollapsedFolders() {
+  try {
+    localStorage.setItem(COLLAPSED_FOLDERS_STORAGE_KEY, JSON.stringify([...state.collapsedFolders]));
+  } catch (e) {
+    // Storage may be unavailable; the state still applies for this session.
+  }
+}
+
 const state = {
   tickets: [],
   folders: [],
@@ -9,7 +28,9 @@ const state = {
   multiSelected: new Set(), // node ids selected via marquee / shift-click, moved together
   searchQuery: '',
   searchNodeMatchIds: new Set(), // ticket ids matched by node label/description, filled in async by /api/search
-  collapsedFolders: new Set(),
+  allTags: [], // every distinct tag used across the user's tickets, for the filter list
+  activeTags: new Set(), // tags currently used to filter the ticket tree (a ticket must have all of them)
+  collapsedFolders: loadCollapsedFolders(),
   pan: { x: 0, y: 0 }, // canvas viewport offset, lets a graph wider than the screen be scrolled/panned
   zoom: 1,
 };
@@ -21,16 +42,21 @@ const el = {
   newFolderBtn: document.getElementById('new-folder-btn'),
   searchBox: document.getElementById('search-box'),
   searchInput: document.getElementById('search-input'),
+  tagsBtn: document.getElementById('tags-btn'),
+  tagFilterBox: document.getElementById('tag-filter-box'),
+  tagFilterList: document.getElementById('tag-filter-list'),
+  tagFilterEmpty: document.getElementById('tag-filter-empty'),
   brandIcon: document.getElementById('brand-icon'),
   emptyState: document.getElementById('empty-state'),
   emptyIcon: document.getElementById('empty-icon'),
   ticketView: document.getElementById('ticket-view'),
   ticketTitle: document.getElementById('ticket-title'),
+  ticketEditBtn: document.getElementById('ticket-edit-btn'),
   ticketDesc: document.getElementById('ticket-desc'),
+  ticketDescEmpty: document.getElementById('ticket-desc-empty'),
+  ticketTags: document.getElementById('ticket-tags'),
   svg: document.getElementById('graph-svg'),
-  addNodeBtn: document.getElementById('add-node-btn'),
-  startNodeBtn: document.getElementById('start-node-btn'),
-  endNodeBtn: document.getElementById('end-node-btn'),
+  addNodeMenuBtn: document.getElementById('add-node-menu-btn'),
   linkModeBtn: document.getElementById('link-mode-btn'),
   centerViewBtn: document.getElementById('center-view-btn'),
   autoLayoutBtn: document.getElementById('auto-layout-btn'),
@@ -66,8 +92,17 @@ const el = {
   ticketFormTitle: document.getElementById('ticket-form-title'),
   ticketFormDesc: document.getElementById('ticket-form-desc'),
   ticketFormFolder: document.getElementById('ticket-form-folder'),
+  ticketFormTags: document.getElementById('ticket-form-tags'),
+  ticketFormTagsInput: document.getElementById('ticket-form-tags-input'),
   ticketFormSubmit: document.getElementById('ticket-form-submit'),
   ticketFormCancel: document.getElementById('ticket-form-cancel'),
+
+  edgeLabelPopover: document.getElementById('edge-label-popover'),
+  edgeLabelHeaderIcon: document.getElementById('edge-label-header-icon'),
+  edgeLabelForm: document.getElementById('edge-label-form'),
+  edgeLabelInput: document.getElementById('edge-label-input'),
+  edgeLabelClose: document.getElementById('edge-label-close'),
+  edgeLabelCancel: document.getElementById('edge-label-cancel'),
 
   folderFormPopover: document.getElementById('folder-form-popover'),
   folderFormHeaderIcon: document.getElementById('folder-form-header-icon'),
@@ -102,6 +137,8 @@ const el = {
   exportTicketBtn: document.getElementById('export-ticket-btn'),
 
   toast: document.getElementById('toast'),
+  toastIcon: document.getElementById('toast-icon'),
+  toastMessage: document.getElementById('toast-message'),
 
   cmdkOverlay: document.getElementById('cmdk-overlay'),
   cmdkInput: document.getElementById('cmdk-input'),
@@ -118,9 +155,12 @@ const el = {
 };
 
 let toastTimer = null;
+const TOAST_ICONS = { success: 'check', error: 'alertTriangle' };
+
 function showToast(message, kind) {
   clearTimeout(toastTimer);
-  el.toast.textContent = message;
+  el.toastMessage.textContent = message;
+  el.toastIcon.innerHTML = svgIcon(TOAST_ICONS[kind] || 'info', 13);
   el.toast.className = 'toast' + (kind ? ` ${kind}` : '');
   el.toast.hidden = false;
   toastTimer = setTimeout(() => {
@@ -303,9 +343,11 @@ el.brandIcon.innerHTML = svgIcon('ticket', 17);
 el.emptyIcon.innerHTML = svgIcon('ticket', 20);
 el.newTicketBtn.innerHTML = svgIcon('plus', 16);
 el.searchBtn.innerHTML = svgIcon('search', 16);
+el.tagsBtn.innerHTML = svgIcon('tag', 16);
 el.newFolderBtn.innerHTML = svgIcon('folderPlus', 16);
 el.importBtn.innerHTML = svgIcon('upload', 16);
 el.nodeViewEdit.innerHTML = svgIcon('pencil', 13);
+el.ticketEditBtn.innerHTML = svgIcon('pencil', 13);
 el.undoBtn.innerHTML = svgIcon('undo', 15);
 el.redoBtn.innerHTML = svgIcon('redo', 15);
 el.cmdkSearchIcon.innerHTML = svgIcon('search', 15);
@@ -315,6 +357,8 @@ el.nodeFormHeaderIcon.innerHTML = svgIcon('pencil', 14);
 el.nodeFormClose.innerHTML = svgIcon('x', 13);
 el.ticketFormHeaderIcon.innerHTML = svgIcon('ticket', 14);
 el.ticketFormClose.innerHTML = svgIcon('x', 13);
+el.edgeLabelHeaderIcon.innerHTML = svgIcon('tag', 14);
+el.edgeLabelClose.innerHTML = svgIcon('x', 13);
 el.folderFormHeaderIcon.innerHTML = svgIconSolid('folder', 14);
 el.folderFormClose.innerHTML = svgIcon('x', 13);
 el.loginBrandIcon.innerHTML = svgIcon('ticket', 26);
@@ -326,6 +370,9 @@ el.logoutBtn.innerHTML = svgIcon('x', 13);
 el.logoutBtn.title = 'Esci';
 document.querySelectorAll('.btn-icon[data-icon]').forEach((elm) => {
   elm.innerHTML = svgIcon(elm.dataset.icon, 14);
+});
+document.querySelectorAll('.md-format-btn span[data-icon]').forEach((elm) => {
+  elm.innerHTML = svgIcon(elm.dataset.icon, 13);
 });
 
 // --- Theme (light/dark) ---
@@ -417,6 +464,7 @@ document.querySelectorAll('.md-tabs').forEach((tabs) => {
   const target = tabs.dataset.target;
   const textarea = document.getElementById(`${target}-desc`);
   const preview = document.getElementById(`${target}-desc-preview`);
+  const formatToolbar = document.querySelector(`.md-format-toolbar[data-target="${target}"]`);
   tabs.querySelectorAll('.md-tab').forEach((tab) => {
     tab.addEventListener('click', () => {
       const mode = tab.dataset.mode;
@@ -425,9 +473,11 @@ document.querySelectorAll('.md-tabs').forEach((tabs) => {
         preview.innerHTML = renderMarkdown(textarea.value);
         textarea.hidden = true;
         preview.hidden = false;
+        formatToolbar.hidden = true;
       } else {
         textarea.hidden = false;
         preview.hidden = true;
+        formatToolbar.hidden = false;
       }
     });
   });
@@ -437,9 +487,11 @@ function resetMarkdownTabs(target) {
   const tabs = document.querySelector(`.md-tabs[data-target="${target}"]`);
   const textarea = document.getElementById(`${target}-desc`);
   const preview = document.getElementById(`${target}-desc-preview`);
+  const formatToolbar = document.querySelector(`.md-format-toolbar[data-target="${target}"]`);
   tabs.querySelectorAll('.md-tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === 'write'));
   textarea.hidden = false;
   preview.hidden = true;
+  formatToolbar.hidden = false;
 }
 
 // --- Markdown formatting shortcuts (bold / code) ---
@@ -470,14 +522,34 @@ document.querySelectorAll('.md-tabs').forEach((tabs) => {
   });
 });
 
+document.querySelectorAll('.md-format-toolbar').forEach((toolbar) => {
+  const textarea = document.getElementById(`${toolbar.dataset.target}-desc`);
+  toolbar.querySelectorAll('.md-format-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      wrapSelection(textarea, btn.dataset.marker);
+      textarea.focus();
+    });
+  });
+});
+
 // --- Data loading ---
 
 async function loadAll() {
-  const [tickets, folders] = await Promise.all([api('/api/tickets'), api('/api/folders')]);
+  const [tickets, folders, allTags] = await Promise.all([api('/api/tickets'), api('/api/folders'), api('/api/tags')]);
   state.tickets = tickets;
   state.folders = folders;
+  state.allTags = allTags;
+  // Dropping a tag from every ticket (or renaming it away) removes it from
+  // /api/tags too; drop any now-nonexistent tag from the active filter so it
+  // doesn't keep silently hiding everything. state.activeTags always holds
+  // lowercase keys (see toggleActiveTag), so this compares like with like.
+  const availableLower = new Set(allTags.map((t) => t.toLowerCase()));
+  for (const tag of [...state.activeTags]) {
+    if (!availableLower.has(tag)) state.activeTags.delete(tag);
+  }
   renderTicketTree();
   populateFolderSelect();
+  renderTagFilterList();
 }
 
 // --- Sidebar tree ---
@@ -497,9 +569,21 @@ function populateFolderSelect() {
 
 function renderTicketTree() {
   const query = state.searchQuery.trim().toLowerCase();
-  const filtered = query
-    ? state.tickets.filter((t) => t.title.toLowerCase().includes(query) || state.searchNodeMatchIds.has(t.id))
+  let filtered = query
+    ? state.tickets.filter(
+        (t) =>
+          t.title.toLowerCase().includes(query) ||
+          state.searchNodeMatchIds.has(t.id) ||
+          (t.tags || []).some((tag) => tag.toLowerCase().includes(query))
+      )
     : state.tickets;
+  if (state.activeTags.size > 0) {
+    filtered = filtered.filter((t) => {
+      const ticketTagsLower = (t.tags || []).map((tag) => tag.toLowerCase());
+      return [...state.activeTags].every((tag) => ticketTagsLower.includes(tag));
+    });
+  }
+  const isFiltering = Boolean(query) || state.activeTags.size > 0;
 
   el.ticketTree.innerHTML = '';
 
@@ -511,7 +595,7 @@ function renderTicketTree() {
     return;
   }
 
-  if (query && filtered.length === 0) {
+  if (isFiltering && filtered.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'tree-empty';
     empty.textContent = 'Nessun ticket corrisponde alla ricerca.';
@@ -532,13 +616,13 @@ function renderTicketTree() {
 
   for (const folder of state.folders) {
     const items = byFolder.get(folder.id) || [];
-    if (query && items.length === 0) continue;
+    if (isFiltering && items.length === 0) continue;
     el.ticketTree.appendChild(renderFolderGroup(folder, items));
   }
 
   // Always render the "unfiled" bucket (even empty) so it stays a valid drag-and-drop
   // target for moving a ticket out of a folder; only hide it while a search matches nothing.
-  if (!(query && unfiled.length === 0)) {
+  if (!(isFiltering && unfiled.length === 0)) {
     el.ticketTree.appendChild(renderFolderGroup(null, unfiled));
   }
 }
@@ -569,6 +653,7 @@ function renderFolderGroup(folder, tickets) {
     if (e.target.closest('.folder-delete')) return;
     if (state.collapsedFolders.has(key)) state.collapsedFolders.delete(key);
     else state.collapsedFolders.add(key);
+    saveCollapsedFolders();
     renderTicketTree();
   });
 
@@ -660,10 +745,20 @@ function renderTicketItem(t) {
     <span class="t-icon">${svgIcon('ticket', 14)}</span>
     <div class="t-info">
       <div class="t-title"></div>
+      <div class="t-tags"></div>
     </div>
     <button class="delete-ticket" title="Elimina ticket">${svgIcon('trash', 13)}</button>
   `;
   item.querySelector('.t-title').textContent = t.title;
+  if (t.tags && t.tags.length > 0) {
+    const tagsEl = item.querySelector('.t-tags');
+    for (const tag of t.tags) {
+      const pill = document.createElement('span');
+      pill.className = 't-tag';
+      pill.textContent = tag;
+      tagsEl.appendChild(pill);
+    }
+  }
   item.title = t.status === 'done' ? 'Completato' : 'Aperto';
   item.setAttribute('draggable', 'true');
   item.addEventListener('dragstart', (e) => {
@@ -684,7 +779,7 @@ function renderTicketItem(t) {
     e.preventDefault();
     e.stopPropagation();
     showContextMenu(e.clientX, e.clientY, [
-      { label: 'Rinomina', icon: 'pencil', action: () => openRenameTicketForm(t, e.clientX, e.clientY) },
+      { label: 'Modifica', icon: 'pencil', action: () => openRenameTicketForm(t, e.clientX, e.clientY) },
       { label: 'Esporta', icon: 'download', action: () => exportTicketFlow(t) },
       'separator',
       { label: 'Elimina', icon: 'trash', danger: true, action: () => deleteTicketFlow(t) },
@@ -720,7 +815,11 @@ async function selectTicket(id) {
 
   const ticket = state.tickets.find((t) => t.id === id) || (await api(`/api/tickets/${id}`));
   el.ticketTitle.textContent = ticket.title;
-  el.ticketDesc.innerHTML = renderMarkdown(ticket.description);
+  const hasTicketDesc = !!(ticket.description && ticket.description.trim());
+  el.ticketDesc.innerHTML = hasTicketDesc ? renderMarkdown(ticket.description) : '';
+  el.ticketDesc.hidden = !hasTicketDesc;
+  el.ticketDescEmpty.hidden = hasTicketDesc;
+  renderHeaderTags(ticket.tags || []);
   el.emptyState.hidden = true;
   el.ticketView.hidden = false;
 
@@ -754,6 +853,61 @@ el.searchBtn.addEventListener('click', () => {
   }
 });
 
+el.tagsBtn.addEventListener('click', () => {
+  const showing = el.tagFilterBox.hidden;
+  el.tagFilterBox.hidden = !showing;
+  el.tagsBtn.classList.toggle('active', showing);
+});
+
+// state.activeTags always holds lowercase keys, since a ticket's own tag
+// casing can differ from the canonical casing /api/tags returns for the same
+// logical tag — comparing case-sensitively would let the two diverge.
+function toggleActiveTag(tag) {
+  const key = tag.toLowerCase();
+  if (state.activeTags.has(key)) state.activeTags.delete(key);
+  else state.activeTags.add(key);
+}
+
+// Shows the open ticket's own tags under its title; clicking one toggles it
+// as a sidebar tag filter, so jumping to "everything else tagged like this" is one click.
+function renderHeaderTags(tags) {
+  el.ticketTags.innerHTML = '';
+  el.ticketTags.hidden = tags.length === 0;
+  for (const tag of tags) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'tag-chip-static';
+    chip.textContent = tag;
+    chip.title = 'Filtra per questo tag';
+    chip.addEventListener('click', () => {
+      toggleActiveTag(tag);
+      el.tagFilterBox.hidden = false;
+      el.tagsBtn.classList.add('active');
+      renderTagFilterList();
+      renderTicketTree();
+    });
+    el.ticketTags.appendChild(chip);
+  }
+}
+
+function renderTagFilterList() {
+  el.tagFilterList.innerHTML = '';
+  el.tagFilterEmpty.hidden = state.allTags.length > 0;
+  el.tagsBtn.classList.toggle('has-active', state.activeTags.size > 0);
+  for (const tag of state.allTags) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'tag-filter-chip' + (state.activeTags.has(tag.toLowerCase()) ? ' active' : '');
+    chip.textContent = tag;
+    chip.addEventListener('click', () => {
+      toggleActiveTag(tag);
+      renderTagFilterList();
+      renderTicketTree();
+    });
+    el.tagFilterList.appendChild(chip);
+  }
+}
+
 let searchDebounceTimer = null;
 
 el.searchInput.addEventListener('input', () => {
@@ -779,13 +933,77 @@ el.searchInput.addEventListener('input', () => {
 
 let ticketFormEditId = null; // null while creating a new ticket, otherwise the id being renamed
 
+// A small chip-input widget: renders tags as removable pills before the text
+// input, and turns Enter/comma/blur on the input into "commit this as a tag".
+const MAX_TAGS_PER_TICKET = 15; // mirrors server/store.js — enforced there too, but warn here instead of silently dropping
+
+function setupTagInput(container, inputEl) {
+  let tags = [];
+  function render() {
+    container.querySelectorAll('.tag-chip').forEach((c) => c.remove());
+    for (const tag of tags) {
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip';
+      const label = document.createElement('span');
+      label.className = 'tag-chip-label';
+      label.textContent = tag;
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'tag-chip-remove';
+      removeBtn.setAttribute('aria-label', 'Rimuovi tag');
+      removeBtn.innerHTML = svgIcon('x', 10);
+      removeBtn.addEventListener('click', () => {
+        tags = tags.filter((t) => t !== tag);
+        render();
+      });
+      chip.appendChild(label);
+      chip.appendChild(removeBtn);
+      container.insertBefore(chip, inputEl);
+    }
+  }
+  function commitInput() {
+    const raw = inputEl.value.trim().slice(0, 24);
+    inputEl.value = '';
+    if (!raw) return;
+    if (tags.length >= MAX_TAGS_PER_TICKET) {
+      showToast(`Massimo ${MAX_TAGS_PER_TICKET} tag per ticket.`, 'error');
+      return;
+    }
+    if (!tags.some((t) => t.toLowerCase() === raw.toLowerCase())) tags.push(raw);
+    render();
+  }
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      commitInput();
+    } else if (e.key === 'Backspace' && !inputEl.value && tags.length > 0) {
+      tags.pop();
+      render();
+    }
+  });
+  inputEl.addEventListener('blur', () => commitInput());
+  return {
+    getTags: () => tags.slice(),
+    setTags: (newTags) => {
+      tags = (newTags || []).slice();
+      render();
+    },
+  };
+}
+
+const ticketFormTagInput = setupTagInput(el.ticketFormTags, el.ticketFormTagsInput);
+
 el.newTicketBtn.addEventListener('click', () => {
   ticketFormEditId = null;
   el.ticketFormHeaderTitle.textContent = 'Nuovo ticket';
   el.ticketFormSubmit.textContent = 'Crea ticket';
   el.ticketFormTitle.value = '';
   el.ticketFormDesc.value = '';
-  el.ticketFormFolder.value = '';
+  // Defaults to the currently open ticket's folder: when triaging several
+  // tickets into the same folder in a row, this saves reselecting it every time.
+  const currentTicket = state.tickets.find((t) => t.id === state.currentTicketId);
+  el.ticketFormFolder.value = (currentTicket && currentTicket.folderId) || '';
+  ticketFormTagInput.setTags([]);
   resetMarkdownTabs('ticket-form');
   const btnRect = el.newTicketBtn.getBoundingClientRect();
   openFormPopover(el.ticketFormPopover, btnRect.right + 8, btnRect.top, () => el.ticketFormTitle.focus());
@@ -793,14 +1011,22 @@ el.newTicketBtn.addEventListener('click', () => {
 
 function openRenameTicketForm(ticket, clientX, clientY) {
   ticketFormEditId = ticket.id;
-  el.ticketFormHeaderTitle.textContent = 'Rinomina ticket';
+  el.ticketFormHeaderTitle.textContent = 'Modifica ticket';
   el.ticketFormSubmit.textContent = 'Salva';
   el.ticketFormTitle.value = ticket.title;
   el.ticketFormDesc.value = ticket.description || '';
   el.ticketFormFolder.value = ticket.folderId || '';
+  ticketFormTagInput.setTags(ticket.tags || []);
   resetMarkdownTabs('ticket-form');
   openFormPopover(el.ticketFormPopover, clientX, clientY, () => el.ticketFormTitle.select());
 }
+
+el.ticketEditBtn.addEventListener('click', () => {
+  const ticket = state.tickets.find((t) => t.id === state.currentTicketId);
+  if (!ticket) return;
+  const btnRect = el.ticketEditBtn.getBoundingClientRect();
+  openRenameTicketForm(ticket, btnRect.left, btnRect.bottom + 8);
+});
 
 el.ticketFormCancel.addEventListener('click', () => closeFormPopover(el.ticketFormPopover, el.ticketForm));
 el.ticketFormClose.addEventListener('click', () => closeFormPopover(el.ticketFormPopover, el.ticketForm));
@@ -811,20 +1037,24 @@ el.ticketForm.addEventListener('submit', async (e) => {
   if (!title) return;
   const description = el.ticketFormDesc.value.trim();
   const folderId = el.ticketFormFolder.value || undefined;
+  // Pick up whatever's still sitting in the tag input's text box (typed but
+  // not yet committed with Enter) so it isn't silently lost on submit.
+  el.ticketFormTagsInput.blur();
+  const tags = ticketFormTagInput.getTags();
   const editId = ticketFormEditId;
   closeFormPopover(el.ticketFormPopover, el.ticketForm);
   try {
     if (editId) {
       await api(`/api/tickets/${editId}`, {
         method: 'PUT',
-        body: JSON.stringify({ title, description, folderId: folderId || null }),
+        body: JSON.stringify({ title, description, folderId: folderId || null, tags }),
       });
       await loadAll();
       if (state.currentTicketId === editId) selectTicket(editId);
     } else {
       const ticket = await api('/api/tickets', {
         method: 'POST',
-        body: JSON.stringify({ title, description, folderId }),
+        body: JSON.stringify({ title, description, folderId, tags }),
       });
       await loadAll();
       selectTicket(ticket.id);
@@ -959,6 +1189,7 @@ async function exportTicketFlow(ticket) {
         title: ticket.title,
         description: ticket.description || '',
         status: ticket.status || 'open',
+        tags: ticket.tags || [],
       },
       graph: { nodes: graph.nodes, edges: graph.edges },
     };
@@ -1001,7 +1232,7 @@ async function importFolderBundle(data) {
     if (!title) continue;
     const created = await api('/api/tickets', {
       method: 'POST',
-      body: JSON.stringify({ title, description: t.description || '', folderId: folder.id }),
+      body: JSON.stringify({ title, description: t.description || '', folderId: folder.id, tags: t.tags }),
     });
     if (t.status === 'done') {
       await api(`/api/tickets/${created.id}`, { method: 'PUT', body: JSON.stringify({ status: 'done' }) });
@@ -1037,7 +1268,7 @@ el.importFileInput.addEventListener('change', async () => {
 
     const created = await api('/api/tickets', {
       method: 'POST',
-      body: JSON.stringify({ title, description }),
+      body: JSON.stringify({ title, description, tags: importedTicket.tags }),
     });
 
     if (importedTicket.status === 'done') {
@@ -1098,6 +1329,7 @@ function onGenericPopoverOutsideClick(e) {
     if (openPopoverEl === el.ticketFormPopover) closeFormPopover(el.ticketFormPopover, el.ticketForm);
     else if (openPopoverEl === el.folderFormPopover) closeFormPopover(el.folderFormPopover, el.folderForm);
     else if (openPopoverEl === el.nodeFormPopover) closeNodeForm();
+    else if (openPopoverEl === el.edgeLabelPopover) closeEdgeLabelForm();
   }
 }
 
@@ -1105,19 +1337,22 @@ function closeAllPopovers() {
   if (!el.ticketFormPopover.hidden) closeFormPopover(el.ticketFormPopover, el.ticketForm);
   if (!el.folderFormPopover.hidden) closeFormPopover(el.folderFormPopover, el.folderForm);
   if (!el.nodeViewPopover.hidden) closeNodeView();
+  if (!el.edgeLabelPopover.hidden) closeEdgeLabelForm();
   closeNodeForm();
 }
 
 // --- Graph: node CRUD ---
 
-function addNodeAt(x, y, clientX, clientY) {
+function addNodeAt(x, y, clientX, clientY, nodeType) {
   openNodeForm({
     clientX,
     clientY,
     initial: { label: '', description: '' },
+    titleOverride: nodeType === 'conditional' ? 'Nuovo nodo condizionale' : undefined,
     onSubmit: ({ label, description }) => {
       pushUndo();
       const node = { id: genId(), label, description, done: false, x, y };
+      if (nodeType) node.nodeType = nodeType;
       state.graph.nodes.push(node);
       renderGraph();
       saveGraph();
@@ -1143,15 +1378,19 @@ function addConnectedNode(sourceNode, clientX, clientY) {
   });
 }
 
+// Title is only auto-derived (and therefore locked) for Start/End nodes;
+// a conditional node's label is exactly what makes it useful, so it stays editable.
+const LOCKED_TITLE_NODE_TYPES = new Set(['start', 'end']);
+
 function editNode(node, clientX, clientY) {
   openNodeForm({
     clientX,
     clientY,
     initial: { label: node.label, description: node.description || '' },
-    lockTitle: !!node.nodeType,
+    lockTitle: LOCKED_TITLE_NODE_TYPES.has(node.nodeType),
     onSubmit: ({ label, description }) => {
       pushUndo();
-      if (!node.nodeType) node.label = label;
+      if (!LOCKED_TITLE_NODE_TYPES.has(node.nodeType)) node.label = label;
       node.description = description;
       renderGraph();
       saveGraph();
@@ -1212,11 +1451,11 @@ el.nodeViewClose.addEventListener('click', () => closeNodeView());
 
 let nodeFormState = null;
 
-function openNodeForm({ clientX, clientY, initial, onSubmit, lockTitle }) {
+function openNodeForm({ clientX, clientY, initial, onSubmit, lockTitle, titleOverride }) {
   closeAllPopovers();
   resetMarkdownTabs('node-form');
   nodeFormState = { onSubmit };
-  el.nodeFormHeaderTitle.textContent = initial.label ? 'Modifica nodo' : 'Nuovo nodo';
+  el.nodeFormHeaderTitle.textContent = titleOverride || (initial.label ? 'Modifica nodo' : 'Nuovo nodo');
   el.nodeFormTitle.value = initial.label || '';
   el.nodeFormDesc.value = initial.description || '';
   el.nodeFormTitle.readOnly = !!lockTitle;
@@ -1281,6 +1520,55 @@ function removeEdge(edgeId) {
 function toggleDone(nodeId) {
   const node = state.graph.nodes.find((n) => n.id === nodeId);
   if (node) node.done = !node.done;
+}
+
+// --- Copy / paste selected nodes (in-memory clipboard, not the OS one — this
+// only ever needs to round-trip within the app, and skipping the Clipboard API
+// avoids its permission prompts) ---
+
+let nodeClipboard = null; // { nodes, edges } deep copies of the selection at the time of copying
+
+function copySelectionToClipboard() {
+  const ids =
+    state.multiSelected.size > 0
+      ? new Set(state.multiSelected)
+      : state.selected && state.selected.type === 'node'
+      ? new Set([state.selected.id])
+      : null;
+  if (!ids || ids.size === 0) return false;
+  const nodes = state.graph.nodes.filter((n) => ids.has(n.id));
+  const edges = state.graph.edges.filter((e) => ids.has(e.from) && ids.has(e.to));
+  nodeClipboard = { nodes: JSON.parse(JSON.stringify(nodes)), edges: JSON.parse(JSON.stringify(edges)) };
+  showToast(nodes.length === 1 ? 'Nodo copiato.' : `${nodes.length} nodi copiati.`, 'success');
+  return true;
+}
+
+function pasteClipboard() {
+  if (!nodeClipboard || nodeClipboard.nodes.length === 0) return;
+  pushUndo();
+  const PASTE_OFFSET = 32;
+  const idMap = new Map();
+  const newNodes = nodeClipboard.nodes.map((n) => {
+    const newId = genId();
+    idMap.set(n.id, newId);
+    const clone = { ...n, id: newId, x: n.x + PASTE_OFFSET, y: n.y + PASTE_OFFSET };
+    // Start/End are meant to be unique per graph — pasting a copy of one
+    // demotes it to a plain node instead of creating a second marker.
+    if (LOCKED_TITLE_NODE_TYPES.has(clone.nodeType)) delete clone.nodeType;
+    return clone;
+  });
+  const newEdges = nodeClipboard.edges.map((e) => ({
+    ...e,
+    id: genId(),
+    from: idMap.get(e.from),
+    to: idMap.get(e.to),
+  }));
+  state.graph.nodes.push(...newNodes);
+  state.graph.edges.push(...newEdges);
+  state.selected = null;
+  state.multiSelected = new Set(newNodes.map((n) => n.id));
+  renderGraph();
+  saveGraph();
 }
 
 function updateLinkModeUI() {
@@ -1367,12 +1655,27 @@ function doRedo() {
 el.undoBtn.addEventListener('click', doUndo);
 el.redoBtn.addEventListener('click', doRedo);
 
-el.addNodeBtn.addEventListener('click', () => {
+function addNodeAtCenter(clientX, clientY, nodeType) {
   const center = viewCenterGraphPoint();
   const x = center.x + (Math.random() * 60 - 30);
   const y = center.y + (Math.random() * 60 - 30);
-  const btnRect = el.addNodeBtn.getBoundingClientRect();
-  addNodeAt(x, y, btnRect.left, btnRect.bottom + 6);
+  addNodeAt(x, y, clientX, clientY, nodeType);
+}
+
+el.addNodeMenuBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const btnRect = el.addNodeMenuBtn.getBoundingClientRect();
+  const clientX = btnRect.left;
+  const clientY = btnRect.bottom + 6;
+  const hasStart = state.graph.nodes.some((n) => n.nodeType === 'start');
+  const hasEnd = state.graph.nodes.some((n) => n.nodeType === 'end');
+  showContextMenu(clientX, clientY, [
+    { label: 'Nodo', icon: 'plus', action: () => addNodeAtCenter(clientX, clientY) },
+    { label: 'Nodo condizionale', icon: 'gitBranch', action: () => addNodeAtCenter(clientX, clientY, 'conditional') },
+    'separator',
+    { label: hasStart ? 'Vai al nodo di inizio' : 'Nodo di inizio', icon: 'play', action: () => addSpecialNode('start') },
+    { label: hasEnd ? 'Vai al nodo di fine' : 'Nodo di fine', icon: 'flag', action: () => addSpecialNode('end') },
+  ]);
 });
 
 el.linkModeBtn.addEventListener('click', () => {
@@ -1399,6 +1702,7 @@ function addSpecialNode(nodeType) {
   const existing = state.graph.nodes.find((n) => n.nodeType === nodeType);
   if (existing) {
     state.selected = { type: 'node', id: existing.id };
+    panToNode(existing);
     renderGraph();
     return;
   }
@@ -1428,8 +1732,57 @@ function addSpecialNode(nodeType) {
   saveGraph();
 }
 
-el.startNodeBtn.addEventListener('click', () => addSpecialNode('start'));
-el.endNodeBtn.addEventListener('click', () => addSpecialNode('end'));
+// --- Edge labels (e.g. "Sì" / "No" branches out of a conditional node) ---
+
+let edgeLabelState = null; // the edge currently being labeled
+
+function openEdgeLabelForm(edge, clientX, clientY) {
+  closeAllPopovers();
+  edgeLabelState = edge;
+  el.edgeLabelInput.value = edge.label || '';
+  hideContextMenu();
+
+  const popover = el.edgeLabelPopover;
+  popover.hidden = false;
+  const popW = 290;
+  const popH = popover.offsetHeight || 110;
+  const margin = 12;
+  let left = (clientX ?? window.innerWidth / 2) + 8;
+  let top = (clientY ?? window.innerHeight / 2) + 8;
+  left = Math.min(left, window.innerWidth - popW - margin);
+  top = Math.min(top, window.innerHeight - popH - margin);
+  left = Math.max(margin, left);
+  top = Math.max(margin, top);
+  popover.style.left = `${left}px`;
+  popover.style.top = `${top}px`;
+  openPopoverEl = popover;
+  requestAnimationFrame(() => el.edgeLabelInput.focus());
+  setTimeout(() => document.addEventListener('click', onGenericPopoverOutsideClick), 0);
+}
+
+function closeEdgeLabelForm() {
+  el.edgeLabelPopover.hidden = true;
+  if (openPopoverEl === el.edgeLabelPopover) openPopoverEl = null;
+  edgeLabelState = null;
+  el.edgeLabelForm.reset();
+  document.removeEventListener('click', onGenericPopoverOutsideClick);
+}
+
+el.edgeLabelForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const edge = edgeLabelState;
+  if (!edge) return;
+  const label = el.edgeLabelInput.value.trim();
+  closeEdgeLabelForm();
+  pushUndo();
+  if (label) edge.label = label;
+  else delete edge.label;
+  renderGraph();
+  saveGraph();
+});
+
+el.edgeLabelCancel.addEventListener('click', () => closeEdgeLabelForm());
+el.edgeLabelClose.addEventListener('click', () => closeEdgeLabelForm());
 
 el.deleteSelectionBtn.addEventListener('click', async () => {
   if (state.multiSelected.size > 0) {
@@ -1524,7 +1877,8 @@ function buildCommandList() {
   });
 
   if (ticketOpen) {
-    items.push({ icon: 'plus', label: 'Aggiungi nodo', hint: 'Grafo', action: () => el.addNodeBtn.click() });
+    items.push({ icon: 'plus', label: 'Aggiungi nodo', hint: 'Grafo', action: () => addNodeAtCenter() });
+    items.push({ icon: 'gitBranch', label: 'Aggiungi nodo condizionale', hint: 'Grafo', action: () => addNodeAtCenter(undefined, undefined, 'conditional') });
     items.push({ icon: 'play', label: 'Vai al nodo di Inizio', hint: 'Grafo', action: () => jumpToSpecialNode('start') });
     items.push({ icon: 'flag', label: 'Vai al nodo di Fine', hint: 'Grafo', action: () => jumpToSpecialNode('end') });
     items.push({ icon: 'layoutGrid', label: 'Riordina automaticamente i nodi', hint: 'Grafo', action: () => el.autoLayoutBtn.click() });
@@ -1613,6 +1967,17 @@ el.cmdkInput.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
+  // Kedalion saves automatically after every change, so Ctrl/Cmd+S has nothing
+  // useful to do — but the browser's own "Save Page As..." would otherwise
+  // trigger, which is never what's wanted here. Always intercept it, regardless
+  // of what else is open, so it never reaches the browser.
+  if (e.key.toLowerCase() === 's' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    if (!el.ticketView.hidden && state.currentTicketId) {
+      showToast('Salvato automaticamente.', 'success');
+    }
+    return;
+  }
   if (!el.cmdkOverlay.hidden) {
     return; // the palette's own input keydown handler (above) owns arrows/enter/escape while open
   }
@@ -1654,6 +2019,19 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key.toLowerCase() === 'y' && (e.ctrlKey || e.metaKey) && !isTypingInField() && !el.ticketView.hidden) {
     e.preventDefault();
     doRedo();
+  } else if (e.key.toLowerCase() === 'a' && (e.ctrlKey || e.metaKey) && !isTypingInField() && !el.ticketView.hidden) {
+    e.preventDefault();
+    if (state.graph.nodes.length === 0) return;
+    state.selected = null;
+    state.multiSelected = new Set(state.graph.nodes.map((n) => n.id));
+    renderGraph();
+  } else if (e.key.toLowerCase() === 'c' && (e.ctrlKey || e.metaKey) && !isTypingInField() && !el.ticketView.hidden) {
+    if (copySelectionToClipboard()) e.preventDefault();
+  } else if (e.key.toLowerCase() === 'v' && (e.ctrlKey || e.metaKey) && !isTypingInField() && !el.ticketView.hidden) {
+    if (nodeClipboard) {
+      e.preventDefault();
+      pasteClipboard();
+    }
   } else if (e.key === 'Tab' && !isTypingInField() && !openPopoverEl && el.contextMenu.hidden && !el.ticketView.hidden) {
     if (state.graph.nodes.length === 0) return;
     e.preventDefault();
@@ -1806,6 +2184,11 @@ function onEdgeContextMenu(edge, e) {
   renderGraph();
   showContextMenu(e.clientX, e.clientY, [
     {
+      label: edge.label ? 'Modifica etichetta' : 'Aggiungi etichetta',
+      icon: 'tag',
+      action: () => openEdgeLabelForm(edge, e.clientX, e.clientY),
+    },
+    {
       label: 'Elimina collegamento',
       icon: 'trash',
       danger: true,
@@ -1828,6 +2211,7 @@ el.svg.addEventListener('contextmenu', (e) => {
   const hasEnd = state.graph.nodes.some((n) => n.nodeType === 'end');
   showContextMenu(e.clientX, e.clientY, [
     { label: 'Aggiungi nodo qui', icon: 'plus', action: () => addNodeAt(x, y, e.clientX, e.clientY) },
+    { label: 'Aggiungi nodo condizionale qui', icon: 'gitBranch', action: () => addNodeAt(x, y, e.clientX, e.clientY, 'conditional') },
     'separator',
     { label: hasStart ? 'Vai al nodo di inizio' : 'Aggiungi nodo di inizio', icon: 'play', action: () => addSpecialNode('start') },
     { label: hasEnd ? 'Vai al nodo di fine' : 'Aggiungi nodo di fine', icon: 'flag', action: () => addSpecialNode('end') },
@@ -1847,8 +2231,10 @@ function onNodeClick(node) {
         state.graph.edges.push({ id: genId(), from: state.linkFirst, to: node.id });
         saveGraph();
       }
-      state.linkFirst = null;
-      state.mode = 'idle';
+      // Stay in link mode after connecting: the second node becomes the first
+      // end of the next link, so chaining A→B→C→D takes one click per node
+      // instead of re-entering link mode before every single connection.
+      state.linkFirst = node.id;
       updateLinkModeUI();
     }
     renderGraph();
@@ -1913,15 +2299,11 @@ function onNodeMouseDown(node, e) {
   };
 }
 
-const GRID_SIZE = 24;
-
-function snapToGrid(value) {
-  return Math.round(value / GRID_SIZE) * GRID_SIZE;
-}
-
-// Smart alignment guides: while dragging a node, snap its center to the x/y of
-// any other node's center once it gets within ALIGN_THRESHOLD graph units, and
-// report which coordinate matched so a guide line can be drawn for it.
+// Smart alignment guides: while dragging a node with Ctrl/Cmd held, snap its
+// center to the x/y of any other node's center once it gets within
+// ALIGN_THRESHOLD graph units, and report which coordinate matched so a guide
+// line can be drawn for it. Off by default so the guides don't show on every
+// drag — only when the user actually asks for alignment help.
 const ALIGN_THRESHOLD = 6;
 
 function computeAlignSnap(nodeId, x, y) {
@@ -2053,20 +2435,12 @@ el.svg.addEventListener('mousemove', (e) => {
   if (groupDragState) {
     let dx = e.clientX - groupDragState.startClientX;
     let dy = e.clientY - groupDragState.startClientY;
-    if (e.ctrlKey || e.metaKey) {
-      // Snap the dragged node's own absolute position to the grid, then apply that
-      // same corrected delta to the rest of the group — snapping the raw mouse
-      // delta instead (as before) only ever landed on the grid if the node's
-      // starting position already happened to be grid-aligned.
-      const draggedStart = groupDragState.starts.get(groupDragState.draggedNodeId);
-      if (draggedStart) {
-        dx = snapToGrid(draggedStart.x + dx) - draggedStart.x;
-        dy = snapToGrid(draggedStart.y + dy) - draggedStart.y;
-      }
-    }
+    // Movement is free by default; holding Ctrl/Cmd turns on snap-to-other-nodes
+    // alignment (with guide lines) — otherwise the guides would show on every
+    // drag whether you wanted them or not.
     let guideX = null;
     let guideY = null;
-    if (!(e.ctrlKey || e.metaKey)) {
+    if (e.ctrlKey || e.metaKey) {
       const draggedStart = groupDragState.starts.get(groupDragState.draggedNodeId);
       if (draggedStart) {
         const snap = computeAlignSnap(groupDragState.draggedNodeId, draggedStart.x + dx, draggedStart.y + dy);
@@ -2108,9 +2482,6 @@ el.svg.addEventListener('mousemove', (e) => {
   let guideX = null;
   let guideY = null;
   if (e.ctrlKey || e.metaKey) {
-    newX = snapToGrid(newX);
-    newY = snapToGrid(newY);
-  } else {
     const snap = computeAlignSnap(node.id, newX, newY);
     newX = snap.x;
     newY = snap.y;
@@ -2211,6 +2582,7 @@ function svgIconGroup(name, cx, cy, size, className) {
 }
 
 function renderGraph() {
+  el.deleteSelectionBtn.disabled = !state.selected && state.multiSelected.size === 0;
   el.svg.innerHTML = '';
 
   let defs = document.createElementNS(SVG_NS, 'defs');
@@ -2258,6 +2630,27 @@ function renderGraph() {
     });
     line.addEventListener('contextmenu', (e) => onEdgeContextMenu(edge, e));
     viewport.appendChild(line);
+
+    if (edge.label) {
+      const midX = (start.x + end.x) / 2;
+      const midY = (start.y + end.y) / 2;
+      const bg = document.createElementNS(SVG_NS, 'rect');
+      const w = Math.max(24, edge.label.length * 6.5 + 10);
+      bg.setAttribute('x', midX - w / 2);
+      bg.setAttribute('y', midY - 9);
+      bg.setAttribute('width', w);
+      bg.setAttribute('height', 18);
+      bg.setAttribute('rx', 5);
+      bg.setAttribute('class', 'edge-label-bg');
+      bg.style.pointerEvents = 'none';
+      viewport.appendChild(bg);
+      const labelEl = document.createElementNS(SVG_NS, 'text');
+      labelEl.setAttribute('x', midX);
+      labelEl.setAttribute('y', midY);
+      labelEl.setAttribute('class', 'edge-label-text');
+      labelEl.textContent = edge.label;
+      viewport.appendChild(labelEl);
+    }
   }
 
   for (const node of state.graph.nodes) {
@@ -2294,6 +2687,11 @@ function renderGraph() {
       }
       onNodeClick(node);
     });
+    rect.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      if (state.mode === 'link') return;
+      editNode(node, e.clientX, e.clientY);
+    });
     rect.addEventListener('contextmenu', (e) => onNodeContextMenu(node, e));
     if (node.label.length > NODE_LABEL_MAX_CHARS) {
       const titleEl = document.createElementNS(SVG_NS, 'title');
@@ -2307,7 +2705,7 @@ function renderGraph() {
     text.setAttribute('y', node.y);
     text.setAttribute(
       'class',
-      'node-label' + (node.done ? ' done' : '') + (node.nodeType ? ' locked' : '')
+      'node-label' + (node.done ? ' done' : '') + (LOCKED_TITLE_NODE_TYPES.has(node.nodeType) ? ' locked' : '')
     );
     text.textContent = truncateLabel(node.label);
     text.style.pointerEvents = 'none';
